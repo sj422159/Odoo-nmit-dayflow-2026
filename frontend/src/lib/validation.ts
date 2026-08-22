@@ -103,7 +103,7 @@ export const adminEmployeeSchema = z.object({
   designation: z.string().min(2, 'Enter a job title.'),
   employment_type: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
   date_of_joining: z.string().min(1, 'Pick a joining date.'),
-  role: z.enum(['EMPLOYEE', 'ADMIN', 'HR_ADMIN', 'CORPORATE']),
+  role: z.enum(['CORPORATE', 'HR_ADMIN', 'ADMIN', 'EMPLOYEE']),
   is_active: z.boolean(),
   phone: z.string().or(z.literal('')),
   address: z.string().or(z.literal('')),

@@ -27,3 +27,20 @@
     }
   }
 }
+
+@layer components {
+  .week-bar-leave {
+    background-color: #8e99f6;
+    background-image: repeating-linear-gradient(135deg, transparent 0 7px, rgba(255, 255, 255, 0.42) 7px 14px);
+  }
+
+  .week-bar-today {
+    background-size: 28px 100%;
+    animation: week-progress 1.4s linear infinite;
+  }
+}
+
+@keyframes week-progress {
+  from { background-position: 0 0; }
+  to { background-position: 28px 0; }
+}
