@@ -34,9 +34,17 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
   const onSubmit = async (values: SignInValues) => {
     setBanner(null)
     try {
-      await signIn(values.email, values.password)
+      const session = await signIn(values.email, values.password)
       const from = (location.state as { from?: string } | null)?.from
-      navigate(from && from !== '/signin' ? from : '/dashboard', { replace: true })
+      const destination =
+        from && from !== '/signin' && from !== '/corporate/signin'
+          ? from
+          : session.user.role === 'CORPORATE'
+            ? '/corporate/dashboard'
+            : session.user.role === 'HR_ADMIN' || session.user.role === 'ADMIN'
+              ? '/admin/employees'
+              : '/dashboard'
+      navigate(destination, { replace: true })
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.fields.email) setError('email', { message: error.fields.email })
