@@ -7,6 +7,7 @@ interface Props {
   unit?: string
   hint?: string
   icon?: ReactNode
+  action?: ReactNode
   tone?: 'default' | 'present' | 'pending' | 'absent' | 'flow'
   className?: string
 }
@@ -19,7 +20,7 @@ const TONES = {
   flow: 'text-flow-500',
 }
 
-export function StatCard({ label, value, unit, hint, icon, tone = 'default', className }: Props) {
+export function StatCard({ label, value, unit, hint, icon, action, tone = 'default', className }: Props) {
   return (
     <div className={cx('rounded-2xl border border-slate-150 bg-white p-4 shadow-card sm:p-5', className)}>
       <div className="flex items-center justify-between gap-2">
@@ -31,6 +32,7 @@ export function StatCard({ label, value, unit, hint, icon, tone = 'default', cla
         {unit && <span className="text-base font-semibold text-away">{unit}</span>}
       </p>
       {hint && <p className="mt-1 text-sm text-away">{hint}</p>}
+      {action && <div className="mt-4 border-t border-slate-150 pt-3">{action}</div>}
     </div>
   )
 }

@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays, Clock, LogIn, LogOut, TrendingUp, Wallet } from 'lucide-react'
+import { BellRing, CalendarDays, Clock, LogIn, LogOut, Wallet } from 'lucide-react'
 import { api, ApiError } from '@/api/client'
-import type { AttendanceSummary, EmployeeInsights, LeaveBalance, LeaveList, TodayStatus } from '@/api/types'
+import type { AttendanceSummary, EmployeeInsights, LeaveBalance, LeaveList, MyPayroll, TodayStatus } from '@/api/types'
 import { useAuth } from '@/context/AuthContext'
 import { useLiveRefresh, useRealtime } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
@@ -19,11 +19,11 @@ import {
   Pill,
   Skeleton,
 } from '@/components/ui/Primitives'
-import { fmtDate, fmtDuration, fmtTime, LEAVE_STATUS_TONE, LEAVE_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, titleCase } from '@/lib/format'
+import { fmtDate, fmtDuration, fmtMoney, fmtTime, LEAVE_STATUS_TONE, LEAVE_TYPE_LABEL, STATUS_LABEL, STATUS_TONE, titleCase } from '@/lib/format'
 
 export default function EmployeeHome() {
   const { session } = useAuth()
-  const { refresh } = useRealtime()
+  const { refresh, snapshot } = useRealtime()
   const [clocking, setClocking] = useState(false)
   const [clockError, setClockError] = useState<string | null>(null)
 
@@ -35,6 +35,7 @@ export default function EmployeeHome() {
         api.get<LeaveBalance>('/leave/balance/me'),
         api.get<LeaveList>('/leave/requests/me', { page_size: 4 }),
         api.get<EmployeeInsights>('/analytics/me', { days: 30 }),
+        api.get<MyPayroll>('/payroll/me'),
       ]),
     [],
   )
@@ -69,8 +70,97 @@ export default function EmployeeHome() {
   }
   if (error || !data) return <ErrorState message={error ?? 'No data came back.'} onRetry={reload} />
 
-  const [today, week, balance, leaves, insights] = data
+  const [today, week, balance, leaves, _insights, payroll] = data
   const firstName = session?.full_name.split(' ')[0] ?? 'there'
+
+  const unreadAlerts = snapshot.unread_notifications ?? 0
+  const attendanceTone = today.checked_in ? (today.status === 'ABSENT' ? 'absent' : 'present') : 'pending'
+  const leaveTone = balance.paid_remaining <= 0 ? 'absent' : balance.paid_remaining <= 2 ? 'pending' : 'present'
+
+  const summaryCards: Array<{
+    label: string
+    value: number | string
+    unit: string
+    hint: string
+    tone: 'present' | 'pending' | 'absent'
+    icon: ReactNode
+    action: ReactNode
+  }> = useMemo(
+    () => [
+      {
+        label: 'Today’s attendance',
+        value: today.checked_in ? fmtDuration(today.worked_minutes) : 'Not started',
+        unit: today.checked_in ? 'today' : 'check-in',
+        hint: today.check_in
+          ? `In at ${fmtTime(today.check_in)}${today.check_out ? ` · Out at ${fmtTime(today.check_out)}` : ' · still on shift'}`
+          : 'No check-in recorded yet',
+        tone: attendanceTone,
+        icon: <Clock className="h-4 w-4" />,
+        action: today.checked_in && !today.checked_out ? (
+          <Button variant="success" className="w-full" onClick={() => clock('check-out')} loading={clocking} icon={<LogOut className="h-4 w-4" />}>
+            Check out
+          </Button>
+        ) : (
+          <Link to="/attendance" className="block">
+            <Button variant="secondary" className="w-full">
+              View attendance
+            </Button>
+          </Link>
+        ),
+      },
+      {
+        label: 'Leave balance',
+        value: balance.paid_remaining,
+        unit: `/${balance.paid_total} days`,
+        hint:
+          balance.pending_days > 0
+            ? `${balance.pending_days} day(s) awaiting approval`
+            : balance.paid_remaining === 0
+              ? 'No paid leave left this year'
+              : 'Healthy balance this cycle',
+        tone: leaveTone,
+        icon: <CalendarDays className="h-4 w-4" />,
+        action: (
+          <Link to="/leave" className="block">
+            <Button variant="secondary" className="w-full">
+              Manage leave
+            </Button>
+          </Link>
+        ),
+      },
+      {
+        label: 'Payroll summary',
+        value: payroll.salary ? fmtMoney(payroll.salary.net_monthly, payroll.currency) : '—',
+        unit: payroll.salary ? 'net / month' : 'salary',
+        hint: payroll.salary ? `YTD ${fmtMoney(payroll.ytd_net, payroll.currency)}` : 'Salary structure pending',
+        tone: payroll.salary ? 'present' : 'pending',
+        icon: <CalendarDays className="h-4 w-4" />,
+        action: (
+          <Link to="/payroll" className="block">
+            <Button variant="secondary" className="w-full">
+              View payslips
+            </Button>
+          </Link>
+        ),
+      },
+      {
+        label: 'Alerts',
+        value: unreadAlerts,
+        unit: unreadAlerts === 1 ? 'new' : 'new',
+        hint: unreadAlerts > 0 ? 'Review unread notices and approvals' : 'No urgent items right now',
+        tone: (unreadAlerts > 0 ? 'absent' : 'present') as 'present' | 'absent',
+        icon: <BellRing className="h-4 w-4" />,
+        action: (
+          <Link to="/dashboard" className="block">
+            <Button variant="secondary" className="w-full">
+              Review alerts
+            </Button>
+          </Link>
+        ),
+      },
+    ],
+    [attendanceTone, balance.paid_remaining, balance.paid_total, balance.pending_days, clock, clocking, payroll, today.check_in, today.check_out, today.checked_in, today.worked_minutes, unreadAlerts],
+  )
 
   return (
     <>
@@ -145,35 +235,19 @@ export default function EmployeeHome() {
         )}
       </Card>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Attendance · 30 days"
-          value={insights.attendance_rate_30d}
-          unit="%"
-          tone={insights.attendance_rate_30d >= 90 ? 'present' : 'pending'}
-          icon={<TrendingUp className="h-4 w-4" />}
-          hint={`${insights.total_hours_30d}h logged`}
-        />
-        <StatCard
-          label="Paid leave left"
-          value={balance.paid_remaining}
-          unit={`/ ${balance.paid_total}`}
-          icon={<CalendarDays className="h-4 w-4" />}
-          hint={balance.pending_days ? `${balance.pending_days} day(s) awaiting approval` : 'No pending requests'}
-        />
-        <StatCard
-          label="Sick leave left"
-          value={balance.sick_remaining}
-          unit={`/ ${balance.sick_total}`}
-          icon={<CalendarDays className="h-4 w-4" />}
-        />
-        <StatCard
-          label="Average day"
-          value={insights.avg_daily_hours}
-          unit="h"
-          icon={<Clock className="h-4 w-4" />}
-          hint={`Punctuality ${insights.punctuality_score}`}
-        />
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            unit={card.unit}
+            hint={card.hint}
+            icon={card.icon}
+            tone={card.tone}
+            action={card.action}
+          />
+        ))}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
