@@ -223,15 +223,13 @@ export function AppShell() {
   }
 
   const brand = (
-    <div className="flex items-center gap-2.5">
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-flow-500 text-sm font-bold text-white">
-        D
-      </span>
-      <span className="leading-tight">
-        <span className="block text-sm font-bold tracking-tight text-white">Dayflow</span>
-        <span className="block text-[11px] text-white/50">Every workday, aligned</span>
-      </span>
-    </div>
+    <Link to="/dashboard" className="flex items-center gap-2.5 group">
+      <img
+        src="/tecryst-logo-white.png"
+        alt="TeCryst"
+        className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
+      />
+    </Link>
   )
 
   return (
