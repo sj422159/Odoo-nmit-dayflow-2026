@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -26,7 +26,7 @@ class SignUpRequest(BaseModel):
     def _code_format(cls, v: str) -> str:
         v = v.strip().upper()
         if not EMPLOYEE_CODE_RE.match(v):
-            raise ValueError("Employee ID looks like DF-1042: 2-4 letters, a dash, then 3-6 digits.")
+            raise ValueError("ID looks like DF-1042: 2-4 letters, a dash, then 3-6 digits.")
         return v
 
     @field_validator("first_name", "last_name")
@@ -54,6 +54,7 @@ class SignUpRequest(BaseModel):
 class SignInRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)
+    account_type: Optional[Literal["corp_admin", "hr", "employee"]] = None
 
 
 class RefreshRequest(BaseModel):
@@ -75,20 +76,21 @@ class TokenPair(BaseModel):
     expires_in: int
 
 
-class UserOut(BaseModel):
+class AccountOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    employee_code: str
+    code: str
     email: EmailStr
     role: Role
+    account_type: Literal["corp_admin", "hr", "employee"]
     is_verified: bool
     is_active: bool
     last_login_at: Optional[datetime] = None
 
 
 class SessionOut(BaseModel):
-    user: UserOut
+    user: AccountOut
     employee_id: Optional[int] = None
     full_name: str
     department: Optional[str] = None

@@ -12,8 +12,28 @@ class StrEnum(str, Enum):
 
 
 class Role(StrEnum):
-    ADMIN = "ADMIN"      # HR officer / administrator
+    CORP_ADMIN = "CORP_ADMIN"  # Highest organization-level administrator
+    HR = "HR"                  # HR officer / People operations
+    EMPLOYEE = "EMPLOYEE"      # Standard employee
+
+
+class DocumentType(StrEnum):
+    PAN_CARD = "PAN_CARD"
+    BANK_DETAILS = "BANK_DETAILS"
+    ADDRESS_PROOF = "ADDRESS_PROOF"
+    EXPERIENCE_LETTER = "EXPERIENCE_LETTER"
+    AADHAAR_CARD = "AADHAAR_CARD"
+
+
+class RecipientType(StrEnum):
+    CORP_ADMIN = "CORP_ADMIN"
+    HR = "HR"
     EMPLOYEE = "EMPLOYEE"
+
+
+class ReviewerType(StrEnum):
+    HR = "HR"
+    CORP_ADMIN = "CORP_ADMIN"
 
 
 class AttendanceStatus(StrEnum):

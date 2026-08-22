@@ -1,18 +1,19 @@
 from datetime import date
 from math import ceil
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import get_current_employee, get_current_hr_or_corp_admin
 from app.db.session import get_db
+from app.models.corp_admin import CorpAdmin
 from app.models.employee import Employee
-from app.models.enums import LeaveStatus, LeaveType, Role
+from app.models.enums import LeaveStatus, LeaveType, RecipientType, ReviewerType, Role
+from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveRequest
 from app.models.notification import Notification
-from app.models.user import User
 from app.schemas.leave import (
     LeaveApplyRequest,
     LeaveBalanceOut,
@@ -32,10 +33,10 @@ def _out(request: LeaveRequest, employee: Optional[Employee] = None) -> LeaveOut
     payload = LeaveOut.model_validate(request)
     if employee is not None:
         payload.employee_name = employee.full_name
-        payload.employee_code = employee.user.employee_code
+        payload.employee_code = employee.employee_code
         payload.department = employee.department
-    if request.reviewer is not None:
-        payload.reviewer_name = request.reviewer.employee.full_name if request.reviewer.employee else request.reviewer.email
+    if request.reviewer_id:
+        payload.reviewer_name = f"{request.reviewer_type or 'Admin'} #{request.reviewer_id}"
     return payload
 
 
@@ -67,10 +68,11 @@ def apply_for_leave(
     db.add(request)
     db.flush()
 
-    for admin in db.scalars(select(User).where(User.role == Role.ADMIN.value, User.is_active.is_(True))):
+    for hr in db.scalars(select(HROfficer).where(HROfficer.is_active.is_(True))):
         db.add(
             Notification(
-                user_id=admin.id,
+                recipient_type=RecipientType.HR.value,
+                recipient_id=hr.id,
                 category="leave",
                 title=f"{employee.full_name} requested {days} day(s) of {payload.leave_type.value.lower()} leave",
                 body=payload.remarks,
@@ -81,7 +83,7 @@ def apply_for_leave(
     db.refresh(request)
 
     result = _out(request, employee)
-    bus.publish("leave.requested", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish("leave.requested", result.model_dump(), to_admins=True, to_user_ids=[employee.id])
     return result
 
 
@@ -151,14 +153,14 @@ def cancel_request(
     db.commit()
     db.refresh(request)
     result = _out(request, employee)
-    bus.publish("leave.cancelled", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish("leave.cancelled", result.model_dump(), to_admins=True, to_user_ids=[employee.id])
     return result
 
 
 @router.get("/requests", response_model=PaginatedLeaves)
 def list_requests(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
     leave_status: Optional[LeaveStatus] = None,
     leave_type: Optional[LeaveType] = None,
     department: Optional[str] = None,
@@ -196,15 +198,17 @@ def decide_request(
     request_id: int,
     payload: LeaveDecisionRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: Any = Depends(get_current_hr_or_corp_admin),
 ):
     request = db.get(LeaveRequest, request_id)
     if request is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No request with that ID.")
     employee = db.get(Employee, request.employee_id)
 
+    reviewer_type = ReviewerType.CORP_ADMIN.value if isinstance(admin, CorpAdmin) else ReviewerType.HR.value
+
     try:
-        svc.decide(db, request, payload.decision, admin.id, payload.comment)
+        svc.decide(db, request, payload.decision, reviewer_type, admin.id, payload.comment)
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 
@@ -216,18 +220,20 @@ def decide_request(
         )
 
     verb = "approved" if payload.decision == LeaveStatus.APPROVED else "rejected"
-    db.add(
-        Notification(
-            user_id=employee.user_id,
-            category="leave",
-            title=f"Your leave request for {request.start_date:%d %b} was {verb}",
-            body=payload.comment,
-            link="/leave",
+    if employee:
+        db.add(
+            Notification(
+                recipient_type=RecipientType.EMPLOYEE.value,
+                recipient_id=employee.id,
+                category="leave",
+                title=f"Your leave request for {request.start_date:%d %b} was {verb}",
+                body=payload.comment,
+                link="/leave",
+            )
         )
-    )
     db.commit()
     db.refresh(request)
 
     result = _out(request, employee)
-    bus.publish(f"leave.{verb}", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish(f"leave.{verb}", result.model_dump(), to_admins=True, to_user_ids=[employee.id if employee else 0])
     return result

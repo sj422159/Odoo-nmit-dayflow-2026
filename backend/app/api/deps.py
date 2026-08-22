@@ -1,5 +1,5 @@
-"""Shared dependencies: DB session, current user, role guards."""
-from typing import Optional
+"""Shared dependencies: DB session, current role guards for CorpAdmin, HR, Employee."""
+from typing import Any, Optional, Tuple, Union
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
+from app.models.corp_admin import CorpAdmin
 from app.models.employee import Employee
 from app.models.enums import Role
-from app.models.user import User
+from app.models.hr_officer import HROfficer
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -22,45 +23,97 @@ CREDENTIALS_ERROR = HTTPException(
 )
 
 
-def get_current_user(
+def get_current_authenticated_account(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
-) -> User:
+) -> Tuple[str, Union[CorpAdmin, HROfficer, Employee]]:
+    """Decodes JWT and retrieves active account from corp_admins, hr_officers, or employees table."""
     if credentials is None or not credentials.credentials:
         raise CREDENTIALS_ERROR
     try:
         payload = decode_token(credentials.credentials, "access")
-        user_id = int(payload["sub"])
+        account_id = int(payload["sub"])
+        account_type = payload.get("account_type")
+        role_str = payload.get("role")
     except (JWTError, KeyError, ValueError):
         raise CREDENTIALS_ERROR
 
-    user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    account: Optional[Union[CorpAdmin, HROfficer, Employee]] = None
+
+    if account_type == "corp_admin" or role_str == Role.CORP_ADMIN.value:
+        account = db.get(CorpAdmin, account_id)
+        resolved_type = "corp_admin"
+    elif account_type == "hr" or role_str == Role.HR.value:
+        account = db.get(HROfficer, account_id)
+        resolved_type = "hr"
+    elif account_type == "employee" or role_str == Role.EMPLOYEE.value:
+        account = db.get(Employee, account_id)
+        resolved_type = "employee"
+    else:
+        # Fallback query attempt
+        account = db.get(Employee, account_id) or db.get(HROfficer, account_id) or db.get(CorpAdmin, account_id)
+        if isinstance(account, CorpAdmin):
+            resolved_type = "corp_admin"
+        elif isinstance(account, HROfficer):
+            resolved_type = "hr"
+        elif isinstance(account, Employee):
+            resolved_type = "employee"
+        else:
+            raise CREDENTIALS_ERROR
+
+    if account is None or not getattr(account, "is_active", True):
         raise CREDENTIALS_ERROR
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Confirm your email address to unlock your account.",
-        )
-    return user
+
+    return resolved_type, account
 
 
-def get_current_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != Role.ADMIN.value:
+def get_current_corp_admin(
+    auth_tuple: Tuple[str, Any] = Depends(get_current_authenticated_account)
+) -> CorpAdmin:
+    account_type, account = auth_tuple
+    if account_type != "corp_admin" or not isinstance(account, CorpAdmin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This area is limited to HR administrators.",
+            detail="This area is limited to Corporate Administrators.",
         )
-    return user
+    return account
+
+
+def get_current_hr(
+    auth_tuple: Tuple[str, Any] = Depends(get_current_authenticated_account)
+) -> HROfficer:
+    account_type, account = auth_tuple
+    if account_type != "hr" or not isinstance(account, HROfficer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is limited to HR Officers.",
+        )
+    return account
 
 
 def get_current_employee(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    auth_tuple: Tuple[str, Any] = Depends(get_current_authenticated_account)
 ) -> Employee:
-    employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
-    if employee is None:
+    account_type, account = auth_tuple
+    if account_type != "employee" or not isinstance(account, Employee):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No employee record is linked to this account. Ask HR to complete your profile.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is limited to Employee accounts.",
         )
-    return employee
+    return account
+
+
+def get_current_hr_or_corp_admin(
+    auth_tuple: Tuple[str, Any] = Depends(get_current_authenticated_account)
+) -> Union[CorpAdmin, HROfficer]:
+    account_type, account = auth_tuple
+    if account_type not in ("corp_admin", "hr"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires HR Officer or Corporate Admin authorization.",
+        )
+    return account  # type: ignore
+
+
+# Backwards compatibility alias for existing admin endpoints
+get_current_admin = get_current_hr_or_corp_admin

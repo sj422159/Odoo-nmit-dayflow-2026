@@ -1,9 +1,4 @@
-"""In-process pub/sub + WebSocket fan-out.
-
-Every mutation in the API publishes a typed event; connected clients receive it
-over /api/v1/ws within milliseconds. Admins receive org-wide events, employees
-only receive events addressed to their own user id.
-"""
+"""In-process pub/sub + WebSocket fan-out for CorpAdmin, HR, and Employee roles."""
 import asyncio
 import json
 import logging
@@ -31,12 +26,20 @@ def json_safe(value: Any) -> Any:
 
 
 class Connection:
-    __slots__ = ("websocket", "user_id", "role", "employee_id")
+    __slots__ = ("websocket", "user_id", "role", "account_type", "employee_id")
 
-    def __init__(self, websocket: WebSocket, user_id: int, role: str, employee_id: Optional[int]):
+    def __init__(
+        self,
+        websocket: WebSocket,
+        user_id: int,
+        role: str,
+        account_type: str,
+        employee_id: Optional[int],
+    ):
         self.websocket = websocket
         self.user_id = user_id
         self.role = role
+        self.account_type = account_type
         self.employee_id = employee_id
 
 
@@ -45,18 +48,25 @@ class ConnectionManager:
         self._connections: Set[Connection] = set()
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, user_id: int, role: str, employee_id: Optional[int]) -> Connection:
+    async def connect(
+        self,
+        websocket: WebSocket,
+        user_id: int,
+        role: str,
+        account_type: str,
+        employee_id: Optional[int],
+    ) -> Connection:
         await websocket.accept()
-        conn = Connection(websocket, user_id, role, employee_id)
+        conn = Connection(websocket, user_id, role, account_type, employee_id)
         async with self._lock:
             self._connections.add(conn)
-        logger.info("WS connected user=%s role=%s (%d open)", user_id, role, len(self._connections))
+        logger.info("WS connected id=%s role=%s (%d open)", user_id, role, len(self._connections))
         return conn
 
     async def disconnect(self, conn: Connection) -> None:
         async with self._lock:
             self._connections.discard(conn)
-        logger.info("WS disconnected user=%s (%d open)", conn.user_id, len(self._connections))
+        logger.info("WS disconnected id=%s (%d open)", conn.user_id, len(self._connections))
 
     def online_user_ids(self) -> List[int]:
         return sorted({c.user_id for c in self._connections})
@@ -65,7 +75,7 @@ class ConnectionManager:
         try:
             await conn.websocket.send_text(json.dumps(json_safe(message)))
             return True
-        except Exception:  # client vanished mid-send
+        except Exception:
             await self.disconnect(conn)
             return False
 
@@ -77,8 +87,9 @@ class ConnectionManager:
         to_user_ids: Optional[List[int]] = None,
     ) -> None:
         targets = []
+        admin_roles = {Role.CORP_ADMIN.value, Role.HR.value}
         for conn in list(self._connections):
-            if to_admins and conn.role == Role.ADMIN.value:
+            if to_admins and conn.role in admin_roles:
                 targets.append(conn)
             elif to_user_ids and conn.user_id in to_user_ids:
                 targets.append(conn)
@@ -115,7 +126,7 @@ class EventBus:
         loop = self._loop
         if loop and loop.is_running():
             asyncio.run_coroutine_threadsafe(coro, loop)
-        else:  # pragma: no cover - only when publishing outside the server (CLI/seed)
+        else:
             coro.close()
             logger.debug("Event %s dropped: no running loop", event)
 

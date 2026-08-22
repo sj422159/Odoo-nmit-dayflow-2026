@@ -1,11 +1,11 @@
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models.enums import EmploymentType, Role
+from app.models.enums import DocumentType, EmploymentType, Role
 
 PHONE_RE = re.compile(r"^\+?[0-9][0-9 \-]{6,19}$")
 
@@ -23,9 +23,10 @@ class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    title: str
-    category: str
-    file_url: str
+    document_type: DocumentType
+    file_path: str
+    original_filename: str
+    uploaded_at: datetime
 
 
 class SalaryStructureOut(BaseModel):
@@ -50,7 +51,7 @@ class EmployeeSummary(BaseModel):
     department: str
     designation: str
     employment_type: EmploymentType
-    role: Role
+    role: Role = Role.EMPLOYEE
     is_active: bool
     avatar_url: Optional[str] = None
     today_status: Optional[str] = None
@@ -88,7 +89,7 @@ class EmployeeSelfUpdate(BaseModel):
 
 
 class EmployeeAdminUpdate(EmployeeSelfUpdate):
-    """Admins may edit the full record."""
+    """Admins/HR may edit the full record."""
 
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=80)
     last_name: Optional[str] = Field(default=None, min_length=1, max_length=80)

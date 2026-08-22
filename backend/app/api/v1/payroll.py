@@ -1,17 +1,17 @@
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import get_current_employee, get_current_hr_or_corp_admin
 from app.db.session import get_db
 from app.models.employee import Employee
+from app.models.enums import RecipientType
 from app.models.notification import Notification
 from app.models.payroll import Payslip, SalaryStructure
-from app.models.user import User
 from app.schemas.employee import SalaryStructureOut
 from app.schemas.payroll import (
     MyPayrollOut,
@@ -31,7 +31,7 @@ def _payslip_out(slip: Payslip, employee: Optional[Employee] = None) -> PayslipO
     employee = employee or slip.employee
     if employee is not None:
         payload.employee_name = employee.full_name
-        payload.employee_code = employee.user.employee_code
+        payload.employee_code = employee.employee_code
     return payload
 
 
@@ -60,7 +60,7 @@ def my_payroll(employee: Employee = Depends(get_current_employee), db: Session =
 @router.get("/payslips", response_model=List[PayslipOut])
 def list_payslips(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
     year: int = Query(default_factory=lambda: date.today().year, ge=2000, le=2100),
     month: Optional[int] = Query(None, ge=1, le=12),
 ):
@@ -76,15 +76,15 @@ def list_payslips(
 
 
 @router.get("/structures", response_model=List[dict])
-def list_structures(db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
-    employees = list(db.scalars(select(Employee).join(Employee.user)))
+def list_structures(db: Session = Depends(get_db), _: Any = Depends(get_current_hr_or_corp_admin)):
+    employees = list(db.scalars(select(Employee)))
     out = []
     for employee in employees:
         structure = svc.current_structure(db, employee.id)
         out.append(
             {
                 "employee_id": employee.id,
-                "employee_code": employee.user.employee_code,
+                "employee_code": employee.employee_code,
                 "full_name": employee.full_name,
                 "department": employee.department,
                 "designation": employee.designation,
@@ -101,7 +101,7 @@ def upsert_salary_structure(
     employee_id: int,
     payload: SalaryStructureUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -125,7 +125,8 @@ def upsert_salary_structure(
 
     db.add(
         Notification(
-            user_id=employee.user_id,
+            recipient_type=RecipientType.EMPLOYEE.value,
+            recipient_id=employee.id,
             category="payroll",
             title="Your salary structure was updated",
             body=f"Effective {payload.effective_from:%d %b %Y}.",
@@ -139,7 +140,7 @@ def upsert_salary_structure(
     bus.publish(
         "payroll.structure_updated",
         {"employee_id": employee_id, "full_name": employee.full_name, **result.model_dump()},
-        to_user_ids=[employee.user_id],
+        to_user_ids=[employee.id],
     )
     return result
 
@@ -148,7 +149,7 @@ def upsert_salary_structure(
 def run_payroll(
     payload: PayrollRunRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
 ):
     """Recompute payslips for a period from recorded attendance."""
     created, updated, total_net, currency = svc.run_payroll(db, payload.year, payload.month)

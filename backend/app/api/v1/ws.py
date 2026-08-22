@@ -1,4 +1,4 @@
-"""Live channel. Clients connect to /api/v1/ws?token=<access token>."""
+"""Live WebSocket channel for CorpAdmin, HR Officers, and Employees."""
 import asyncio
 import json
 import logging
@@ -11,12 +11,12 @@ from sqlalchemy import func, select
 from app.core.security import decode_token
 from app.db.session import SessionLocal
 from app.models.attendance import AttendanceRecord
+from app.models.corp_admin import CorpAdmin
 from app.models.employee import Employee
 from app.models.enums import AttendanceStatus, LeaveStatus, Role
+from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveRequest
 from app.models.notification import Notification
-from app.models.user import User
-from app.services.realtime import manager
 
 logger = logging.getLogger("dayflow.ws")
 router = APIRouter(tags=["Realtime"])
@@ -24,18 +24,20 @@ router = APIRouter(tags=["Realtime"])
 HEARTBEAT_SECONDS = 20
 
 
-def _snapshot(user_id: int, role: str, employee_id):
-    """A small state pulse so a reconnecting client is instantly consistent."""
+def _snapshot(account_id: int, role: str, account_type: str, employee_id: int = None):
+    """A state pulse so connected clients remain consistent."""
     with SessionLocal() as db:
         today = date.today()
         unread = db.scalar(
             select(func.count()).select_from(Notification).where(
-                Notification.user_id == user_id, Notification.read_at.is_(None)
+                Notification.recipient_type == role,
+                Notification.recipient_id == account_id,
+                Notification.read_at.is_(None),
             )
         ) or 0
         data = {"unread_notifications": unread, "server_time": datetime.now(timezone.utc).isoformat()}
 
-        if role == Role.ADMIN.value:
+        if role in (Role.CORP_ADMIN.value, Role.HR.value):
             data["present_today"] = db.scalar(
                 select(func.count()).select_from(AttendanceRecord).where(
                     AttendanceRecord.work_date == today,
@@ -60,10 +62,11 @@ def _snapshot(user_id: int, role: str, employee_id):
                     AttendanceRecord.check_out.is_(None),
                 )
             ) or 0
-        elif employee_id:
+        elif employee_id or account_type == "employee":
+            emp_id = employee_id or account_id
             record = db.scalar(
                 select(AttendanceRecord).where(
-                    AttendanceRecord.employee_id == employee_id, AttendanceRecord.work_date == today
+                    AttendanceRecord.employee_id == emp_id, AttendanceRecord.work_date == today
                 )
             )
             data["today"] = {
@@ -79,28 +82,42 @@ def _snapshot(user_id: int, role: str, employee_id):
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     try:
         payload = decode_token(token, "access")
-        user_id = int(payload["sub"])
+        account_id = int(payload["sub"])
+        account_type = payload.get("account_type")
+        role = payload.get("role")
     except (JWTError, KeyError, ValueError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
         return
 
+    employee_id = None
     with SessionLocal() as db:
-        user = db.get(User, user_id)
-        if user is None or not user.is_active or not user.is_verified:
+        if account_type == "corp_admin" or role == Role.CORP_ADMIN.value:
+            acc = db.get(CorpAdmin, account_id)
+            role = Role.CORP_ADMIN.value
+            account_type = "corp_admin"
+        elif account_type == "hr" or role == Role.HR.value:
+            acc = db.get(HROfficer, account_id)
+            role = Role.HR.value
+            account_type = "hr"
+        else:
+            acc = db.get(Employee, account_id)
+            role = Role.EMPLOYEE.value
+            account_type = "employee"
+            employee_id = acc.id if acc else None
+
+        if acc is None or not getattr(acc, "is_active", True) or not getattr(acc, "is_verified", True):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Account not available")
             return
-        employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
-        employee_id = employee.id if employee else None
-        role = user.role
 
-    conn = await manager.connect(websocket, user_id, role, employee_id)
-    await manager.send_to(conn, {"event": "connected", "payload": _snapshot(user_id, role, employee_id)})
+    from app.services.realtime import manager
+    conn = await manager.connect(websocket, account_id, role, account_type, employee_id)
+    await manager.send_to(conn, {"event": "connected", "payload": _snapshot(account_id, role, account_type, employee_id)})
 
     async def pulse():
         while True:
             await asyncio.sleep(HEARTBEAT_SECONDS)
             ok = await manager.send_to(
-                conn, {"event": "snapshot", "payload": _snapshot(user_id, role, employee_id)}
+                conn, {"event": "snapshot", "payload": _snapshot(account_id, role, account_type, employee_id)}
             )
             if not ok:
                 break
@@ -117,12 +134,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 await manager.send_to(conn, {"event": "pong", "payload": {}})
             elif message.get("action") == "refresh":
                 await manager.send_to(
-                    conn, {"event": "snapshot", "payload": _snapshot(user_id, role, employee_id)}
+                    conn, {"event": "snapshot", "payload": _snapshot(account_id, role, account_type, employee_id)}
                 )
     except WebSocketDisconnect:
         pass
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("WS error for user %s: %s", user_id, exc)
+    except Exception as exc:
+        logger.warning("WS error for id %s: %s", account_id, exc)
     finally:
         pulse_task.cancel()
         await manager.disconnect(conn)

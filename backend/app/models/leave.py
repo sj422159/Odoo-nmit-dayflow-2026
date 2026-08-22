@@ -31,14 +31,12 @@ class LeaveRequest(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=LeaveStatus.PENDING.value, index=True
     )
-    reviewer_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    reviewer_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    reviewer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     review_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     employee: Mapped["Employee"] = relationship()  # noqa: F821
-    reviewer: Mapped[Optional["User"]] = relationship()  # noqa: F821
 
 
 class LeaveBalance(Base, TimestampMixin):

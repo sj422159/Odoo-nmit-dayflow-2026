@@ -85,10 +85,18 @@ def apply_approved_balance(db: Session, request: LeaveRequest) -> None:
     db.flush()
 
 
-def decide(db: Session, request: LeaveRequest, decision: LeaveStatus, reviewer_id: int, comment: Optional[str]) -> LeaveRequest:
+def decide(
+    db: Session,
+    request: LeaveRequest,
+    decision: LeaveStatus,
+    reviewer_type: str,
+    reviewer_id: int,
+    comment: Optional[str],
+) -> LeaveRequest:
     if request.status != LeaveStatus.PENDING.value:
         raise ValueError(f"This request was already {request.status.lower()}.")
     request.status = decision.value
+    request.reviewer_type = reviewer_type
     request.reviewer_id = reviewer_id
     request.review_comment = comment
     request.reviewed_at = datetime.now(timezone.utc)

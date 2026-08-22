@@ -1,21 +1,23 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
 
 
 class Notification(Base, TimestampMixin):
-    """Activity feed entries; also pushed live over the WebSocket channel."""
+    """Activity feed entries; pushed live over the WebSocket channel."""
 
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_recipient", "recipient_type", "recipient_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    recipient_type: Mapped[str] = mapped_column(String(20), nullable=False, default="EMPLOYEE", index=True)
+    recipient_id: Mapped[int] = mapped_column(nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(32), nullable=False, default="general", index=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

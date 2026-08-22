@@ -1,17 +1,24 @@
+import os
+import re
 from datetime import date
 from math import ceil
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import (
+    get_current_authenticated_account,
+    get_current_employee,
+    get_current_hr_or_corp_admin,
+)
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
-from app.models.employee import Employee
-from app.models.enums import Role
-from app.models.user import User
+from app.models.employee import Employee, EmployeeDocument
+from app.models.enums import DocumentType, Role
 from app.schemas.employee import (
     DocumentOut,
     EmployeeAdminUpdate,
@@ -26,18 +33,21 @@ from app.services.realtime import bus
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
+ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 def _summary(employee: Employee, today_status: Optional[str] = None) -> EmployeeSummary:
     return EmployeeSummary(
         id=employee.id,
-        employee_code=employee.user.employee_code,
+        employee_code=employee.employee_code,
         full_name=employee.full_name,
-        email=employee.user.email,
+        email=employee.email,
         department=employee.department,
         designation=employee.designation,
         employment_type=employee.employment_type,
-        role=employee.user.role,
-        is_active=employee.user.is_active,
+        role=Role.EMPLOYEE,
+        is_active=employee.is_active,
         avatar_url=employee.avatar_url,
         today_status=today_status,
     )
@@ -54,7 +64,7 @@ def _detail(db: Session, employee: Employee, include_salary: bool) -> EmployeeDe
         address=employee.address,
         date_of_joining=employee.date_of_joining,
         manager_name=manager.full_name if manager else None,
-        is_verified=employee.user.is_verified,
+        is_verified=employee.is_verified,
         salary=SalaryStructureOut.model_validate(salary) if salary else None,
         documents=[DocumentOut.model_validate(d) for d in employee.documents],
     )
@@ -82,36 +92,148 @@ def update_my_profile(
     bus.publish(
         "employee.updated",
         {"employee_id": employee.id, "full_name": employee.full_name, "by": "self"},
-        to_user_ids=[employee.user_id],
+        to_user_ids=[employee.id],
     )
     return _detail(db, employee, include_salary=True)
 
 
+# --- EMPLOYEE DOCUMENTS CRUD ---
+
+@router.get("/me/documents", response_model=list[DocumentOut])
+def get_my_documents(employee: Employee = Depends(get_current_employee)):
+    return [DocumentOut.model_validate(d) for d in employee.documents]
+
+
+@router.post("/me/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+async def upload_my_document(
+    document_type: DocumentType = Form(...),
+    file: UploadFile = File(...),
+    employee: Employee = Depends(get_current_employee),
+    db: Session = Depends(get_db),
+):
+    """Upload or replace a normalized document slot for the current employee."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Unsupported file format '{ext}'. Use .pdf, .jpg, .jpeg, or .png.",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "File is too large. Maximum size allowed is 10 MB."
+        )
+
+    # Store in local upload folder: uploads/documents/{employee_id}/
+    target_dir = os.path.join("var", "uploads", "documents", str(employee.id))
+    os.makedirs(target_dir, exist_ok=True)
+
+    safe_type = document_type.value
+    filename = f"{safe_type}_{int(date.today().strftime('%Y%m%d'))}{ext}"
+    file_path = os.path.join(target_dir, filename)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Check existing slot record
+    existing = db.scalar(
+        select(EmployeeDocument).where(
+            EmployeeDocument.employee_id == employee.id,
+            EmployeeDocument.document_type == safe_type,
+        )
+    )
+    if existing:
+        existing.file_path = file_path
+        existing.original_filename = file.filename or filename
+        db.commit()
+        db.refresh(existing)
+        return DocumentOut.model_validate(existing)
+
+    doc = EmployeeDocument(
+        employee_id=employee.id,
+        document_type=safe_type,
+        file_path=file_path,
+        original_filename=file.filename or filename,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return DocumentOut.model_validate(doc)
+
+
+@router.get("/me/documents/{document_type}/download")
+def download_my_document(
+    document_type: DocumentType,
+    employee: Employee = Depends(get_current_employee),
+    db: Session = Depends(get_db),
+):
+    doc = db.scalar(
+        select(EmployeeDocument).where(
+            EmployeeDocument.employee_id == employee.id,
+            EmployeeDocument.document_type == document_type.value,
+        )
+    )
+    if not doc or not os.path.exists(doc.file_path):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document file not found.")
+
+    return FileResponse(
+        path=doc.file_path,
+        filename=doc.original_filename,
+        media_type="application/octet-stream",
+    )
+
+
+@router.delete("/me/documents/{document_type}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_my_document(
+    document_type: DocumentType,
+    employee: Employee = Depends(get_current_employee),
+    db: Session = Depends(get_db),
+):
+    doc = db.scalar(
+        select(EmployeeDocument).where(
+            EmployeeDocument.employee_id == employee.id,
+            EmployeeDocument.document_type == document_type.value,
+        )
+    )
+    if doc:
+        if os.path.exists(doc.file_path):
+            try:
+                os.remove(doc.file_path)
+            except OSError:
+                pass
+        db.delete(doc)
+        db.commit()
+    return None
+
+
+# --- ADMIN / HR MANAGEMENT ENDPOINTS ---
+
 @router.get("", response_model=PaginatedEmployees)
 def list_employees(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
     search: Optional[str] = Query(None, max_length=80, description="Name, email or employee ID"),
     department: Optional[str] = Query(None, max_length=80),
     is_active: Optional[bool] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
-    stmt = select(Employee).join(Employee.user)
+    stmt = select(Employee)
     if search:
         term = f"%{search.strip().lower()}%"
         stmt = stmt.where(
             or_(
                 func.lower(Employee.first_name).like(term),
                 func.lower(Employee.last_name).like(term),
-                func.lower(User.email).like(term),
-                func.lower(User.employee_code).like(term),
+                func.lower(Employee.email).like(term),
+                func.lower(Employee.employee_code).like(term),
             )
         )
     if department:
         stmt = stmt.where(Employee.department == department)
     if is_active is not None:
-        stmt = stmt.where(User.is_active == is_active)
+        stmt = stmt.where(Employee.is_active == is_active)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = list(
@@ -143,13 +265,13 @@ def list_employees(
 
 
 @router.get("/departments", response_model=list[str])
-def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_departments(db: Session = Depends(get_db), _: Any = Depends(get_current_authenticated_account)):
     return [row[0] for row in db.execute(select(Employee.department).distinct().order_by(Employee.department)).all()]
 
 
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 def read_employee(
-    employee_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_admin)
+    employee_id: int, db: Session = Depends(get_db), _: Any = Depends(get_current_hr_or_corp_admin)
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -162,7 +284,7 @@ def update_employee(
     employee_id: int,
     payload: EmployeeAdminUpdate,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: Any = Depends(get_current_hr_or_corp_admin),
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -172,9 +294,9 @@ def update_employee(
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to save — change a field first.")
 
-    role = data.pop("role", None)
     is_active = data.pop("is_active", None)
     manager_id = data.pop("manager_id", "__unset__")
+    data.pop("role", None)  # Employees always remain role EMPLOYEE
 
     if manager_id != "__unset__":
         if manager_id == employee.id:
@@ -186,20 +308,14 @@ def update_employee(
     for field, value in data.items():
         setattr(employee, field, value)
 
-    if role is not None:
-        if employee.user.id == admin.id and role != Role.ADMIN:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot remove your own admin access.")
-        employee.user.role = role.value
     if is_active is not None:
-        if employee.user.id == admin.id and not is_active:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot deactivate your own account.")
-        employee.user.is_active = is_active
+        employee.is_active = is_active
 
     db.commit()
     db.refresh(employee)
     bus.publish(
         "employee.updated",
         {"employee_id": employee.id, "full_name": employee.full_name, "by": "admin"},
-        to_user_ids=[employee.user_id],
+        to_user_ids=[employee.id],
     )
     return _detail(db, employee, include_salary=True)

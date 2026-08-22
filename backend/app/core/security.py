@@ -12,6 +12,7 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 TokenType = Literal["access", "refresh", "email_verify"]
+AccountType = Literal["corp_admin", "hr", "employee"]
 
 PASSWORD_RULES = (
     "Password needs at least 10 characters, one uppercase letter, "
@@ -63,18 +64,31 @@ def _create_token(subject: str, token_type: TokenType, expires: timedelta, extra
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(account_id: int, role: str, account_type: AccountType) -> str:
     return _create_token(
-        str(user_id), "access", timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES), {"role": role}
+        str(account_id),
+        "access",
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        {"role": role, "account_type": account_type},
     )
 
 
-def create_refresh_token(user_id: int) -> str:
-    return _create_token(str(user_id), "refresh", timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
+def create_refresh_token(account_id: int, role: str, account_type: AccountType) -> str:
+    return _create_token(
+        str(account_id),
+        "refresh",
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        {"role": role, "account_type": account_type},
+    )
 
 
-def create_email_token(user_id: int) -> str:
-    return _create_token(str(user_id), "email_verify", timedelta(hours=settings.EMAIL_TOKEN_EXPIRE_HOURS))
+def create_email_token(account_id: int, account_type: AccountType) -> str:
+    return _create_token(
+        str(account_id),
+        "email_verify",
+        timedelta(hours=settings.EMAIL_TOKEN_EXPIRE_HOURS),
+        {"account_type": account_type},
+    )
 
 
 def decode_token(token: str, expected_type: TokenType) -> Dict[str, Any]:

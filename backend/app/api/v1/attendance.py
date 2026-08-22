@@ -1,16 +1,19 @@
 from datetime import date, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import (
+    get_current_authenticated_account,
+    get_current_employee,
+    get_current_hr_or_corp_admin,
+)
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
 from app.models.employee import Employee
 from app.models.enums import AttendanceStatus, Role
-from app.models.user import User
 from app.schemas.attendance import (
     AttendanceAdminUpsert,
     AttendanceOut,
@@ -30,7 +33,7 @@ def _out(record: AttendanceRecord, employee: Optional[Employee] = None) -> Atten
     employee = employee or record.employee
     if employee is not None:
         payload.employee_name = employee.full_name
-        payload.employee_code = employee.user.employee_code
+        payload.employee_code = employee.employee_code
     return payload
 
 
@@ -67,7 +70,7 @@ def check_in(employee: Employee = Depends(get_current_employee), db: Session = D
     db.commit()
     db.refresh(record)
     payload = _out(record, employee)
-    bus.publish("attendance.checked_in", payload.model_dump(), to_user_ids=[employee.user_id])
+    bus.publish("attendance.checked_in", payload.model_dump(), to_user_ids=[employee.id])
     return payload
 
 
@@ -80,7 +83,7 @@ def check_out(employee: Employee = Depends(get_current_employee), db: Session = 
     db.commit()
     db.refresh(record)
     payload = _out(record, employee)
-    bus.publish("attendance.checked_out", payload.model_dump(), to_user_ids=[employee.user_id])
+    bus.publish("attendance.checked_out", payload.model_dump(), to_user_ids=[employee.id])
     return payload
 
 
@@ -109,16 +112,18 @@ def my_week(
 def employee_attendance(
     employee_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    auth_tuple: Tuple[str, Any] = Depends(get_current_authenticated_account),
     start: Optional[date] = None,
     end: Optional[date] = None,
 ):
-    """Admins can open anyone; employees are restricted to their own record."""
+    account_type, account = auth_tuple
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
-    if user.role != Role.ADMIN.value and employee.user_id != user.id:
+
+    if account_type == "employee" and account.id != employee_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only open your own attendance.")
+
     start, end = _resolve_range(start, end)
     return svc.build_summary(svc.records_in_range(db, employee_id, start, end), start, end)
 
@@ -126,7 +131,7 @@ def employee_attendance(
 @router.get("", response_model=List[AttendanceOut])
 def list_attendance(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
     day: Optional[date] = Query(None, description="Defaults to today"),
     department: Optional[str] = None,
     attendance_status: Optional[AttendanceStatus] = None,
@@ -149,7 +154,7 @@ def list_attendance(
 def upsert_record(
     payload: AttendanceAdminUpsert,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: Any = Depends(get_current_hr_or_corp_admin),
 ):
     """HR override for a single day (corrections, manual leave marking)."""
     employee = db.get(Employee, payload.employee_id)
@@ -173,5 +178,5 @@ def upsert_record(
     db.commit()
     db.refresh(record)
     result = _out(record, employee)
-    bus.publish("attendance.updated", result.model_dump(), to_user_ids=[employee.user_id])
+    bus.publish("attendance.updated", result.model_dump(), to_user_ids=[employee.id])
     return result
