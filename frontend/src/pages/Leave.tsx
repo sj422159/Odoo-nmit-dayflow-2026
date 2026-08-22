@@ -225,18 +225,20 @@ export default function Leave() {
         }
       />
 
-      {/* Top Stat Cards (Always visible) */}
-      <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Paid leave left" value={balance.paid_remaining} unit={`/ ${balance.paid_total}`} tone="flow" />
-        <StatCard label="Sick leave left" value={balance.sick_remaining} unit={`/ ${balance.sick_total}`} tone="flow" />
-        <StatCard label="Unpaid taken" value={balance.unpaid_used} unit="d" />
-        <StatCard
-          label="Awaiting approval"
-          value={balance.pending_days}
-          unit="d"
-          tone={balance.pending_days ? 'pending' : 'default'}
-        />
-      </div>
+      {/* Top Stat Cards (Visible in List View) */}
+      {view === 'list' && (
+        <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Paid leave left" value={balance.paid_remaining} unit={`/ ${balance.paid_total}`} tone="flow" />
+          <StatCard label="Sick leave left" value={balance.sick_remaining} unit={`/ ${balance.sick_total}`} tone="flow" />
+          <StatCard label="Unpaid taken" value={balance.unpaid_used} unit="d" />
+          <StatCard
+            label="Awaiting approval"
+            value={balance.pending_days}
+            unit="d"
+            tone={balance.pending_days ? 'pending' : 'default'}
+          />
+        </div>
+      )}
 
       {ok && (
         <p role="status" className="mb-5 rounded-xl bg-present-soft px-4 py-3 text-sm font-semibold text-present">
