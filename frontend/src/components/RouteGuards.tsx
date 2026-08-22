@@ -1,6 +1,15 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import type { Session } from '@/api/types'
+
+export function getRolePath(session: Session | null): string {
+  if (!session) return '/signin'
+  const role = session.user.role
+  if (role === 'CORPORATE') return '/corporate/dashboard'
+  if (role === 'HR_ADMIN' || role === 'ADMIN') return '/admin/employees'
+  return '/dashboard'
+}
 
 function Splash() {
   return (
@@ -23,25 +32,33 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+export function RequireEmployee({ children }: { children: ReactNode }) {
+  const { session, loading, isEmployee } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/signin" replace />
+  if (!isEmployee) return <Navigate to={getRolePath(session)} replace />
+  return <>{children}</>
+}
+
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { session, loading, isAdmin } = useAuth()
   if (loading) return <Splash />
   if (!session) return <Navigate to="/signin" replace />
-  if (!isAdmin) return <Navigate to="/dashboard" replace />
+  if (!isAdmin) return <Navigate to={getRolePath(session)} replace />
   return <>{children}</>
 }
 
 export function RequireCorporate({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth()
+  const { session, loading, isCorpAdmin } = useAuth()
   if (loading) return <Splash />
   if (!session) return <Navigate to="/corporate/signin" replace />
-  if (session.user.role !== 'CORPORATE') return <Navigate to="/dashboard" replace />
+  if (!isCorpAdmin) return <Navigate to={getRolePath(session)} replace />
   return <>{children}</>
 }
 
 export function RedirectIfSignedIn({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
   if (loading) return <Splash />
-  if (session) return <Navigate to="/dashboard" replace />
+  if (session) return <Navigate to={getRolePath(session)} replace />
   return <>{children}</>
 }

@@ -3,7 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { RealtimeProvider } from '@/context/RealtimeContext'
 import { AppShell } from '@/components/AppShell'
-import { RedirectIfSignedIn, RequireAdmin, RequireAuth, RequireCorporate } from '@/components/RouteGuards'
+import { RedirectIfSignedIn, RequireAdmin, RequireAuth, RequireCorporate, RequireEmployee } from '@/components/RouteGuards'
 import { Skeleton } from '@/components/ui/Primitives'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
@@ -54,11 +54,11 @@ export default function App() {
             <Route path="/corporate/dashboard" element={<RequireCorporate><CorporateHome /></RequireCorporate>} />
 
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<RequireEmployee><Dashboard /></RequireEmployee>} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/leave" element={<Leave />} />
-              <Route path="/payroll" element={<Payroll />} />
+              <Route path="/attendance" element={<RequireEmployee><Attendance /></RequireEmployee>} />
+              <Route path="/leave" element={<RequireEmployee><Leave /></RequireEmployee>} />
+              <Route path="/payroll" element={<RequireEmployee><Payroll /></RequireEmployee>} />
 
               <Route path="/admin/employees" element={<RequireAdmin><AdminEmployees /></RequireAdmin>} />
               <Route path="/admin/departments" element={<RequireAdmin><AdminDepartments /></RequireAdmin>} />
