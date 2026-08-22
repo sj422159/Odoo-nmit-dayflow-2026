@@ -16,9 +16,7 @@ import {
   Input,
   Pill,
   Skeleton,
-}
-
-  from '@/components/ui/Primitives'
+} from '@/components/ui/Primitives'
 import { profileSchema, type ProfileValues } from '@/lib/validation'
 import { fmtDate, fmtMoney, initials, titleCase } from '@/lib/format'
 
