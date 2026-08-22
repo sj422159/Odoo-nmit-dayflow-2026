@@ -103,7 +103,6 @@ export interface AttendanceDay {
   worked_minutes: number
   check_in: string | null
   check_out: string | null
-  note?: string | null
 }
 
 export interface AttendanceSummary {

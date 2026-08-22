@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
+  BarChart3,
   CalendarCheck,
   CalendarDays,
   Building2,
@@ -16,7 +17,6 @@ import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/context/RealtimeContext'
 import { api } from '@/api/client'
 import type { EmployeeSummary, Paginated } from '@/api/types'
-import { LiveBadge } from '@/components/LiveBadge'
 import { NotificationBell } from '@/components/NotificationBell'
 import { initials } from '@/lib/format'
 import { cx } from '@/components/ui/Primitives'
@@ -38,12 +38,13 @@ const EMPLOYEE_NAV: NavItem[] = [
 ]
 
 const ADMIN_NAV: NavItem[] = [
-  { to: '/admin/insights', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/employees', label: 'People', icon: Users, badge: 'access' },
-  { to: '/admin/departments', label: 'Department creation', icon: Building2 },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/employees', label: 'Employees', icon: Users, badge: 'access' },
+  { to: '/admin/departments', label: 'Departments', icon: Building2 },
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/admin/leave', label: 'Approvals', icon: CalendarDays, badge: 'pending' },
   { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
+  { to: '/admin/insights', label: 'Insights', icon: BarChart3 },
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
@@ -202,9 +203,10 @@ export function AppShell() {
           >
             <Menu className="h-5 w-5" aria-hidden />
           </button>
-          <span className="font-bold tracking-tight text-ink lg:hidden">Dayflow</span>
+          <Link to="/" className="flex items-center lg:hidden">
+            <img src="/tecryst-logo-dark.png" alt="TeCryst" className="h-7 w-auto object-contain" />
+          </Link>
           <div className="ml-auto flex items-center gap-3">
-            <LiveBadge className="hidden sm:inline-flex" />
             <NotificationBell />
             <span className="hidden h-9 w-9 place-items-center rounded-full bg-flow-50 text-xs font-bold text-flow-600 sm:grid">
               {initials(session?.full_name ?? '')}

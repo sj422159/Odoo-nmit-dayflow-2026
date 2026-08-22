@@ -7,7 +7,6 @@ import { ApiError } from '@/api/client'
 import { useAuth } from '@/context/AuthContext'
 import { signInSchema, type SignInValues } from '@/lib/validation'
 import { AuthLayout } from '@/pages/AuthLayout'
-import { getRolePath } from '@/components/RouteGuards'
 import { Button, Field, FormBanner, Input, Select } from '@/components/ui/Primitives'
 
 type AccessType = 'INTERNAL' | 'EXTERNAL'
@@ -35,10 +34,9 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
   const onSubmit = async (values: SignInValues) => {
     setBanner(null)
     try {
-      const userSession = await signIn(values.email, values.password)
+      await signIn(values.email, values.password)
       const from = (location.state as { from?: string } | null)?.from
-      const targetPath = getRolePath(userSession)
-      navigate(from && from !== '/signin' && from !== '/corporate/signin' ? from : targetPath, { replace: true })
+      navigate(from && from !== '/signin' ? from : '/dashboard', { replace: true })
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.fields.email) setError('email', { message: error.fields.email })
@@ -56,7 +54,7 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
     if (role === 'emp') {
       setAccessType('INTERNAL')
       setInternalRole('EMPLOYEE')
-      setValue('email', 'marcus.lindqvist@dayflow.co')
+      setValue('email', 'employee@dayflow.co')
       setValue('password', '1234')
     } else if (role === 'hr') {
       setAccessType('INTERNAL')
