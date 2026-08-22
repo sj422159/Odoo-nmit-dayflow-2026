@@ -54,7 +54,7 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
     if (role === 'emp') {
       setAccessType('INTERNAL')
       setInternalRole('EMPLOYEE')
-      setValue('email', 'employee@dayflow.co')
+      setValue('email', 'marcus.lindqvist@dayflow.co')
       setValue('password', '1234')
     } else if (role === 'hr') {
       setAccessType('INTERNAL')
