@@ -68,16 +68,16 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                     step={10}
                     value={employeeCount}
                     onChange={(e) => setEmployeeCount(Number(e.target.value))}
-                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-primary bg-gray-200
+                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-teal bg-gray-200
                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zim-primary
+                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zim-teal
                       [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer
                       [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
                       [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full
-                      [&::-moz-range-thumb]:bg-zim-primary [&::-moz-range-thumb]:border-2
+                      [&::-moz-range-thumb]:bg-zim-teal [&::-moz-range-thumb]:border-2
                       [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, var(--color-zim-primary) 0%, var(--color-zim-primary) ${sliderPercent}%, #e5e7eb ${sliderPercent}%, #e5e7eb 100%)`,
+                      background: `linear-gradient(to right, var(--color-zim-teal) 0%, var(--color-zim-teal) ${sliderPercent}%, #e5e7eb ${sliderPercent}%, #e5e7eb 100%)`,
                     }}
                   />
                 </div>
