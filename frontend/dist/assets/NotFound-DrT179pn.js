@@ -1,0 +1,1 @@
+import{j as e,C as t}from"./index-Dkl1EK_d.js";import{P as o}from"./PageHeader-DdjK7nQJ.js";function s(){return e.jsxs(e.Fragment,{children:[e.jsx(o,{title:"Page not found",description:"The requested Dayflow page does not exist."}),e.jsx(t,{className:"p-6 text-sm text-away",children:"Use the navigation to return to your workspace."})]})}export{s as default};
