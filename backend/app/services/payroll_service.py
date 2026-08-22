@@ -76,7 +76,7 @@ def run_payroll(db: Session, year: int, month: int) -> Tuple[int, int, Decimal, 
     total_workdays = len(working_days_between(start, end))
     credits = paid_days_by_employee(db, start, end)
 
-    employees = list(db.scalars(select(Employee).join(Employee.user)))
+    employees = list(db.scalars(select(Employee)))
     created = updated = 0
     total_net = Decimal("0.00")
     currency = "INR"
