@@ -186,15 +186,17 @@ export default function SignUp() {
           />
         </Field>
 
-        {/* Optional Department and Job Title */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Department" htmlFor="department" error={errors.department?.message}>
-            <Input id="department" autoComplete="off" {...register('department')} />
-          </Field>
-          <Field label="Job title" htmlFor="designation" error={errors.designation?.message}>
-            <Input id="designation" autoComplete="off" {...register('designation')} />
-          </Field>
-        </div>
+        {/* Optional Department and Job Title (Employee only) */}
+        {selectedRole === 'EMPLOYEE' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Department" htmlFor="department" error={errors.department?.message}>
+              <Input id="department" autoComplete="off" {...register('department')} />
+            </Field>
+            <Field label="Job title" htmlFor="designation" error={errors.designation?.message}>
+              <Input id="designation" autoComplete="off" {...register('designation')} />
+            </Field>
+          </div>
+        )}
 
         {/* Password Field */}
         <Field label="Password" htmlFor="password" error={errors.password?.message} required>
