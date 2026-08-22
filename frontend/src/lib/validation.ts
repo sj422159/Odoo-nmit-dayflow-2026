@@ -88,7 +88,7 @@ const money = (label: string) =>
     .refine((v) => Number(v) <= 9999999.99, 'That is above the maximum of 9,999,999.99.')
 
 export const salarySchema = z.object({
-  currency: z.string().length(3, 'Payroll currency is INR.').refine((value) => value.toUpperCase() === 'INR', 'Payroll currency is INR.'),
+  currency: z.string().length(3, 'Use a three-letter code, like USD.'),
   basic: money('the basic pay'),
   hra: money('the housing allowance'),
   allowances: money('other allowances'),
@@ -103,7 +103,7 @@ export const adminEmployeeSchema = z.object({
   designation: z.string().min(2, 'Enter a job title.'),
   employment_type: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
   date_of_joining: z.string().min(1, 'Pick a joining date.'),
-  role: z.enum(['CORPORATE', 'HR_ADMIN', 'ADMIN', 'EMPLOYEE']),
+  role: z.enum(['EMPLOYEE', 'ADMIN', 'HR_ADMIN', 'CORPORATE']),
   is_active: z.boolean(),
   phone: z.string().or(z.literal('')),
   address: z.string().or(z.literal('')),

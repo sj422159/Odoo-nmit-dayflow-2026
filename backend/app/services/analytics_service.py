@@ -266,8 +266,8 @@ def irregularity_flags(db: Session, window_days: int = 90, top_n: int = 8) -> Li
     frame["is_outlier"] = forest.predict(X) == -1
 
     codes = {
-        e.id: e.user.employee_code
-        for e in db.scalars(select(Employee).join(Employee.user))
+        e.id: e.employee_code
+        for e in db.scalars(select(Employee))
     }
 
     flagged = frame[frame["is_outlier"]].sort_values("anomaly_score", ascending=False).head(top_n)

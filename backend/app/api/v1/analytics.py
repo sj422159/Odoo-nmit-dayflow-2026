@@ -6,14 +6,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import AnyAccount, get_current_admin, get_current_employee, get_current_user
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
 from app.models.employee import Employee
 from app.models.enums import AttendanceStatus, LeaveStatus
+from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveRequest
 from app.models.payroll import Payslip
-from app.models.user import User
 from app.schemas.analytics import (
     AdminOverview,
     AttendanceForecast,
@@ -29,13 +29,13 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
 @router.get("/overview", response_model=AdminOverview)
-def overview(db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
+def overview(db: Session = Depends(get_db), _: HROfficer = Depends(get_current_admin)):
     today = date.today()
     start = today - timedelta(days=29)
 
     total_employees = db.scalar(select(func.count()).select_from(Employee)) or 0
     active_employees = (
-        db.scalar(select(func.count()).select_from(Employee).join(Employee.user).where(User.is_active.is_(True))) or 0
+        db.scalar(select(func.count()).select_from(Employee).where(Employee.is_active.is_(True))) or 0
     )
     present_today = (
         db.scalar(
@@ -98,7 +98,7 @@ def overview(db: Session = Depends(get_db), _: User = Depends(get_current_admin)
 @router.get("/attendance-trend", response_model=List[TrendPoint])
 def attendance_trend(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
     days: int = Query(30, ge=7, le=180),
 ):
     end = date.today()
@@ -109,7 +109,7 @@ def attendance_trend(
 @router.get("/attendance-forecast", response_model=AttendanceForecast)
 def attendance_forecast(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
     horizon: int = Query(7, ge=1, le=14),
 ):
     """Ridge-regression projection of the org-wide attendance rate."""
@@ -119,7 +119,7 @@ def attendance_forecast(
 @router.get("/irregularities", response_model=List[IrregularityFlag])
 def irregularities(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
     window_days: int = Query(90, ge=30, le=365),
 ):
     """IsolationForest flags for attendance patterns worth a conversation."""
@@ -169,7 +169,7 @@ def my_insights(
 
 
 @router.get("/live-presence")
-def live_presence(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def live_presence(db: Session = Depends(get_db), _: AnyAccount = Depends(get_current_user)):
     """Who is currently checked in — polled as a fallback when the socket is down."""
     today = date.today()
     rows = db.execute(

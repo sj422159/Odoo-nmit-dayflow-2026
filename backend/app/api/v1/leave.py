@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin, get_current_employee, get_current_user
 from app.db.session import get_db
 from app.models.employee import Employee
-from app.models.enums import LeaveStatus, LeaveType, Role
+from app.models.enums import LeaveStatus, LeaveType
+from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveRequest
 from app.models.notification import Notification
-from app.models.user import User
 from app.schemas.leave import (
     LeaveApplyRequest,
     LeaveBalanceOut,
@@ -32,10 +32,8 @@ def _out(request: LeaveRequest, employee: Optional[Employee] = None) -> LeaveOut
     payload = LeaveOut.model_validate(request)
     if employee is not None:
         payload.employee_name = employee.full_name
-        payload.employee_code = employee.user.employee_code
+        payload.employee_code = employee.employee_code
         payload.department = employee.department
-    if request.reviewer is not None:
-        payload.reviewer_name = request.reviewer.employee.full_name if request.reviewer.employee else request.reviewer.email
     return payload
 
 
@@ -67,13 +65,14 @@ def apply_for_leave(
     db.add(request)
     db.flush()
 
-    for admin in db.scalars(select(User).where(User.role == Role.ADMIN.value, User.is_active.is_(True))):
+    for hr in db.scalars(select(HROfficer).where(HROfficer.is_active.is_(True))):
         db.add(
             Notification(
-                user_id=admin.id,
+                recipient_type="hr_officers",
+                recipient_id=hr.id,
                 category="leave",
                 title=f"{employee.full_name} requested {days} day(s) of {payload.leave_type.value.lower()} leave",
-                body=payload.remarks,
+                body=payload.remarks or "Awaiting decision",
                 link="/admin/leave",
             )
         )
@@ -81,36 +80,52 @@ def apply_for_leave(
     db.refresh(request)
 
     result = _out(request, employee)
-    bus.publish("leave.requested", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish("leave.created", result.model_dump(), to_admins=True)
     return result
 
 
-@router.get("/requests/me", response_model=PaginatedLeaves)
-def my_requests(
+@router.get("/balance/me", response_model=LeaveBalanceOut)
+def read_my_balance(
     employee: Employee = Depends(get_current_employee),
     db: Session = Depends(get_db),
-    leave_status: Optional[LeaveStatus] = None,
+):
+    b = svc.get_or_create_balance(db, employee.id)
+    pending_days = svc.count_pending_days(db, employee.id)
+    return LeaveBalanceOut(
+        year=b.year,
+        paid_total=b.paid_total,
+        paid_used=b.paid_used,
+        paid_remaining=b.paid_remaining,
+        sick_total=b.sick_total,
+        sick_used=b.sick_used,
+        sick_remaining=b.sick_remaining,
+        unpaid_used=b.unpaid_used,
+        pending_days=pending_days,
+    )
+
+
+@router.get("/requests/me", response_model=PaginatedLeaves)
+def list_my_requests(
+    employee: Employee = Depends(get_current_employee),
+    db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
     stmt = select(LeaveRequest).where(LeaveRequest.employee_id == employee.id)
-    if leave_status:
-        stmt = stmt.where(LeaveRequest.status == leave_status.value)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    rows = list(
+    items = list(
         db.scalars(
-            stmt.order_by(LeaveRequest.start_date.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            stmt.order_by(LeaveRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
         )
     )
     pending = db.scalar(
-        select(func.count())
-        .select_from(LeaveRequest)
-        .where(LeaveRequest.employee_id == employee.id, LeaveRequest.status == LeaveStatus.PENDING.value)
+        select(func.count()).where(
+            LeaveRequest.employee_id == employee.id, LeaveRequest.status == LeaveStatus.PENDING.value
+        )
     ) or 0
+
     return PaginatedLeaves(
-        items=[_out(r, employee) for r in rows],
+        items=[_out(req, employee) for req in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -119,25 +134,8 @@ def my_requests(
     )
 
 
-@router.get("/balance/me", response_model=LeaveBalanceOut)
-def my_balance(employee: Employee = Depends(get_current_employee), db: Session = Depends(get_db)):
-    balance = svc.get_or_create_balance(db, employee.id)
-    db.commit()
-    return LeaveBalanceOut(
-        year=balance.year,
-        paid_total=balance.paid_total,
-        paid_used=balance.paid_used,
-        paid_remaining=max(balance.paid_total - balance.paid_used, 0),
-        sick_total=balance.sick_total,
-        sick_used=balance.sick_used,
-        sick_remaining=max(balance.sick_total - balance.sick_used, 0),
-        unpaid_used=balance.unpaid_used,
-        pending_days=svc.pending_days(db, employee.id),
-    )
-
-
-@router.delete("/requests/{request_id}", response_model=LeaveOut)
-def cancel_request(
+@router.delete("/requests/{request_id}")
+def withdraw_request(
     request_id: int,
     employee: Employee = Depends(get_current_employee),
     db: Session = Depends(get_db),
@@ -151,14 +149,14 @@ def cancel_request(
     db.commit()
     db.refresh(request)
     result = _out(request, employee)
-    bus.publish("leave.cancelled", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish("leave.cancelled", result.model_dump(), to_admins=True, to_user_ids=[employee.id])
     return result
 
 
 @router.get("/requests", response_model=PaginatedLeaves)
 def list_requests(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
     leave_status: Optional[LeaveStatus] = None,
     leave_type: Optional[LeaveType] = None,
     department: Optional[str] = None,
@@ -196,7 +194,7 @@ def decide_request(
     request_id: int,
     payload: LeaveDecisionRequest,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: HROfficer = Depends(get_current_admin),
 ):
     request = db.get(LeaveRequest, request_id)
     if request is None:
@@ -216,18 +214,20 @@ def decide_request(
         )
 
     verb = "approved" if payload.decision == LeaveStatus.APPROVED else "rejected"
-    db.add(
-        Notification(
-            user_id=employee.user_id,
-            category="leave",
-            title=f"Your leave request for {request.start_date:%d %b} was {verb}",
-            body=payload.comment,
-            link="/leave",
+    if employee:
+        db.add(
+            Notification(
+                recipient_type="employees",
+                recipient_id=employee.id,
+                category="leave",
+                title=f"Your leave request for {request.start_date:%d %b} was {verb}",
+                body=payload.comment,
+                link="/leave",
+            )
         )
-    )
     db.commit()
     db.refresh(request)
 
     result = _out(request, employee)
-    bus.publish(f"leave.{verb}", result.model_dump(), to_admins=True, to_user_ids=[employee.user_id])
+    bus.publish(f"leave.{verb}", result.model_dump(), to_admins=True, to_user_ids=[employee.id] if employee else [])
     return result

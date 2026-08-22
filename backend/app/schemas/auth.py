@@ -69,7 +69,7 @@ class UserOut(BaseModel):
     id: int
     employee_code: Optional[str] = None
     email: EmailStr
-    role: Role
+    role: str
     is_verified: bool
     is_active: bool
     last_login_at: Optional[datetime] = None

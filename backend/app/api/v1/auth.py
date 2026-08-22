@@ -5,7 +5,7 @@ from jose import JWTError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_corporate, get_current_user
+from app.api.deps import AnyAccount, get_current_corporate, get_current_user
 from app.core.config import settings
 from app.core.mailer import send_verification_email
 from app.core.security import (
@@ -17,9 +17,9 @@ from app.core.security import (
     verify_password,
 )
 from app.db.session import get_db
+from app.models.corp_admin import CorpAdmin
 from app.models.employee import Employee
-from app.models.enums import Role
-from app.models.user import User
+from app.models.hr_officer import HROfficer
 from app.schemas.auth import (
     AdminCreateRequest,
     RefreshRequest,
@@ -37,38 +37,40 @@ from app.services.leave_service import get_or_create_balance
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _token_pair(user: User) -> TokenPair:
+def _token_pair_for_account(account_id: int, role: str) -> TokenPair:
     return TokenPair(
-        access_token=create_access_token(user.id, user.role),
-        refresh_token=create_refresh_token(user.id),
+        access_token=create_access_token(account_id, role),
+        refresh_token=create_refresh_token(account_id),
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
 
 @router.post("/signup", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED)
 def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
-    """Register an account. The account stays locked until the email is confirmed."""
+    """Register an employee account."""
     email = payload.email.lower()
-    if db.scalar(select(User).where(func.lower(User.email) == email)):
+    if (
+        db.scalar(select(Employee).where(func.lower(Employee.email) == email))
+        or db.scalar(select(HROfficer).where(func.lower(HROfficer.email) == email))
+        or db.scalar(select(CorpAdmin).where(func.lower(CorpAdmin.email) == email))
+    ):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered. Sign in instead.")
-    user = User(
-        employee_code=None,
-        email=email,
-        hashed_password=hash_password(payload.password),
-        role=Role.EMPLOYEE.value,
-        is_verified=settings.AUTO_VERIFY_EMAIL,
-        approval_status="PENDING",
-    )
-    db.add(user)
-    db.flush()
+
+    # Generate employee code
+    count = db.scalar(select(func.count(Employee.id))) or 0
+    employee_code = f"DF-{1001 + count}"
 
     employee = Employee(
-        user_id=user.id,
+        employee_code=employee_code,
+        email=email,
+        hashed_password=hash_password(payload.password),
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         department="Unassigned",
         designation="Associate",
         date_of_joining=date.today(),
+        is_verified=settings.AUTO_VERIFY_EMAIL,
+        is_active=True,
     )
     db.add(employee)
     db.flush()
@@ -77,13 +79,13 @@ def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
 
     link = None
     if not settings.AUTO_VERIFY_EMAIL:
-        link = send_verification_email(user.email, employee.full_name, create_email_token(user.id))
+        link = send_verification_email(employee.email, employee.full_name, create_email_token(employee.id))
 
     return SignUpResponse(
         message=(
-            "Request submitted. Confirm your email, then wait for HR to approve your access."
+            "Account created. Confirm your email address to sign in."
             if link
-            else "Request submitted. HR must approve your access before you can sign in."
+            else "Account created successfully. You can now sign in."
         ),
         verification_link=link if settings.APP_ENV == "development" else None,
     )
@@ -93,77 +95,82 @@ def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
 def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)):
     try:
         data = decode_token(payload.token, "email_verify")
-        user = db.get(User, int(data["sub"]))
+        account_id = int(data["sub"])
+        account = db.get(Employee, account_id) or db.get(HROfficer, account_id) or db.get(CorpAdmin, account_id)
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "That link is invalid or has expired. Request a new one.")
-    if user is None:
+    if account is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No account matches this link.")
-    if user.is_verified:
+    if account.is_verified:
         return SignUpResponse(message="This address was already confirmed. Sign in to continue.")
-    user.is_verified = True
+    account.is_verified = True
     db.commit()
     return SignUpResponse(message="Email confirmed. Sign in to continue.")
 
 
-@router.post("/resend-verification", response_model=SignUpResponse)
-def resend_verification(payload: ResendVerificationRequest, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(func.lower(User.email) == payload.email.lower()))
-    # Same response either way: do not disclose which addresses exist.
-    if user and not user.is_verified:
-        employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
-        name = employee.full_name if employee else user.email
-        link = send_verification_email(user.email, name, create_email_token(user.id))
-        return SignUpResponse(
-            message="A new confirmation link is on its way.",
-            verification_link=link if settings.APP_ENV == "development" else None,
-        )
-    return SignUpResponse(message="A new confirmation link is on its way.")
-
-
 @router.post("/login", response_model=TokenPair)
 def sign_in(payload: SignInRequest, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(func.lower(User.email) == payload.email.lower()))
-    if user is None or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email or password is incorrect.")
-    if not user.is_active:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is deactivated. Contact HR.")
-    if not user.is_verified:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Confirm your email address first, then sign in.")
-    if user.approval_status != "APPROVED":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your login request is waiting for HR approval.")
-    user.last_login_at = datetime.now(timezone.utc)
-    db.commit()
-    return _token_pair(user)
+    email = payload.email.lower()
+
+    # 1. Search CorpAdmin
+    corp = db.scalar(select(CorpAdmin).where(func.lower(CorpAdmin.email) == email))
+    if corp and verify_password(payload.password, corp.hashed_password):
+        if not corp.is_active:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is deactivated. Contact support.")
+        corp.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+        return _token_pair_for_account(corp.id, "CORPORATE")
+
+    # 2. Search HROfficer
+    hr = db.scalar(select(HROfficer).where(func.lower(HROfficer.email) == email))
+    if hr and verify_password(payload.password, hr.hashed_password):
+        if not hr.is_active:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is deactivated. Contact corporate admin.")
+        hr.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+        return _token_pair_for_account(hr.id, "HR_ADMIN")
+
+    # 3. Search Employee
+    emp = db.scalar(select(Employee).where(func.lower(Employee.email) == email))
+    if emp and verify_password(payload.password, emp.hashed_password):
+        if not emp.is_active:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is deactivated. Contact HR.")
+        emp.last_login_at = datetime.now(timezone.utc)
+        db.commit()
+        return _token_pair_for_account(emp.id, "EMPLOYEE")
+
+    raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email or password is incorrect.")
 
 
 @router.post("/admins", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED)
 def create_admin(
     payload: AdminCreateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_corporate),
+    corp_admin: CorpAdmin = Depends(get_current_corporate),
 ):
     email = payload.email.lower()
-    if db.scalar(select(User).where(func.lower(User.email) == email)):
+    if (
+        db.scalar(select(HROfficer).where(func.lower(HROfficer.email) == email))
+        or db.scalar(select(Employee).where(func.lower(Employee.email) == email))
+    ):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered.")
-    user = User(
+
+    count = db.scalar(select(func.count(HROfficer.id))) or 0
+    hr_code = f"HR-{1000 + count}"
+
+    hr = HROfficer(
+        hr_code=hr_code,
         email=email,
         hashed_password=hash_password(payload.password),
-        role=Role.HR_ADMIN.value,
-        is_verified=True,
-        is_active=True,
-        approval_status="APPROVED",
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    db.add(Employee(
-        user_id=user.id,
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
-        department="Unassigned",
-        designation="HR Administrator",
-        date_of_joining=date.today(),
-    ))
+        department="Human Resources",
+        designation="HR Officer",
+        created_by_corpadmin_id=corp_admin.id,
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(hr)
     db.commit()
     return SignUpResponse(message=f"HR admin access created for {email}.")
 
@@ -172,22 +179,37 @@ def create_admin(
 def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     try:
         data = decode_token(payload.refresh_token, "refresh")
-        user = db.get(User, int(data["sub"]))
+        account_id = int(data["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session expired. Sign in again.")
-    if user is None or not user.is_active:
+
+    # Check across roles
+    account = db.get(CorpAdmin, account_id) or db.get(HROfficer, account_id) or db.get(Employee, account_id)
+    if account is None or not account.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session expired. Sign in again.")
-    return _token_pair(user)
+
+    return _token_pair_for_account(account.id, account.role)
 
 
 @router.get("/me", response_model=SessionOut)
-def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
+def me(account: AnyAccount = Depends(get_current_user)):
+    user_out = UserOut(
+        id=account.id,
+        employee_code=getattr(account, "employee_code", getattr(account, "hr_code", getattr(account, "admin_code", None))),
+        email=account.email,
+        role=account.role,
+        is_verified=account.is_verified,
+        is_active=account.is_active,
+        approval_status="APPROVED",
+        last_login_at=account.last_login_at,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
     return SessionOut(
-        user=UserOut.model_validate(user),
-        employee_id=employee.id if employee else None,
-        full_name=employee.full_name if employee else user.email,
-        department=employee.department if employee else None,
-        designation=employee.designation if employee else None,
-        avatar_url=employee.avatar_url if employee else None,
+        user=user_out,
+        employee_id=account.id if isinstance(account, Employee) else None,
+        full_name=account.full_name,
+        department=getattr(account, "department", "Corporate"),
+        designation=getattr(account, "designation", "Administrator"),
+        avatar_url=account.avatar_url,
     )
