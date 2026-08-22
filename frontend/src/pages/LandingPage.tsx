@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/landing/Navbar'
 import HeroSection from '@/components/landing/HeroSection'
-import ClientLogos from '@/components/landing/ClientLogos'
-import ProductSuite from '@/components/landing/ProductSuite'
 import AgenticAI from '@/components/landing/AgenticAI'
 import Industries from '@/components/landing/Industries'
 import WhyZimyo from '@/components/landing/WhyZimyo'
@@ -37,8 +35,6 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-500 selection:text-white">
       <Navbar onOpenDemo={() => openDemoModal()} onLogin={handleLoginClick} />
       <HeroSection onOpenDemo={openDemoModal} />
-      <ClientLogos />
-      <ProductSuite onOpenDemo={() => openDemoModal()} />
       <AgenticAI />
       <Industries />
       <WhyZimyo />
