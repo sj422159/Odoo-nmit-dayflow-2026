@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowRight, Building2, KeyRound } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/context/AuthContext'
 import { signInSchema, type SignInValues } from '@/lib/validation'
@@ -124,6 +124,7 @@ export default function SignIn() {
                   : 'text-ink-600 hover:text-ink hover:bg-slate-200/50'
               }`}
             >
+              <Icon icon="mdi:account-group-outline" className="h-4 w-4" />
               Internal Access
             </button>
 
@@ -139,13 +140,14 @@ export default function SignIn() {
                   : 'text-ink-600 hover:text-ink hover:bg-slate-200/50'
               }`}
             >
+              <Icon icon="mdi:domain" className="h-4 w-4" />
               External Access
             </button>
           </div>
         </div>
 
         {/* ======================================================== */}
-        {/* 2. INTERNAL ROLE SELECTOR: Dropdown                      */}
+        {/* 2. INTERNAL ROLE SELECTOR: Clean Dropdown                */}
         {/* ======================================================== */}
         {accessType === 'INTERNAL' ? (
           <div>
@@ -161,20 +163,15 @@ export default function SignIn() {
               }}
               className="w-full bg-white font-medium text-ink cursor-pointer"
             >
-              <option value="EMPLOYEE">👤 Employee (Self-Service Attendance &amp; Leaves)</option>
-              <option value="HR_ADMIN">🛡️ HR Officer / Admin (Approvals &amp; Payroll)</option>
+              <option value="EMPLOYEE">Employee</option>
+              <option value="HR_ADMIN">HR / Admin</option>
             </Select>
-            <p className="mt-1.5 text-xs text-ink-400">
-              {internalRole === 'EMPLOYEE'
-                ? 'Sign in to access personal attendance, leaves, and payslips.'
-                : 'Sign in to review workforce logs, approvals, and payroll.'}
-            </p>
           </div>
         ) : (
           /* External Corporate Admin Banner */
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3.5 flex items-start gap-3">
             <div className="rounded-lg bg-indigo-600 p-2 text-white shrink-0">
-              <Building2 className="h-4 w-4" />
+              <Icon icon="mdi:domain" className="h-4 w-4" />
             </div>
             <div>
               <p className="text-xs font-bold text-indigo-950">Corporate Administrator Portal</p>
@@ -234,21 +231,23 @@ export default function SignIn() {
           <Button
             type="submit"
             loading={isSubmitting}
-            className="mt-1 w-full"
-            icon={<ArrowRight className="h-4 w-4" />}
+            className="mt-1 w-full flex items-center justify-center gap-2"
           >
-            {accessType === 'EXTERNAL'
-              ? 'Sign in as Corporate Admin'
-              : internalRole === 'EMPLOYEE'
-              ? 'Sign in as Employee'
-              : 'Sign in as HR Admin'}
+            <span>
+              {accessType === 'EXTERNAL'
+                ? 'Sign in as Corporate Admin'
+                : internalRole === 'EMPLOYEE'
+                ? 'Sign in as Employee'
+                : 'Sign in as HR / Admin'}
+            </span>
+            <Icon icon="mdi:arrow-right" className="h-4 w-4" />
           </Button>
         </form>
 
         {/* Quick autofill helper chips */}
         <div className="border-t border-slate-150 pt-3">
           <p className="text-[11px] font-semibold text-ink-400 mb-2 flex items-center gap-1.5">
-            <KeyRound className="h-3 w-3" /> Quick fill test accounts:
+            <Icon icon="mdi:key-outline" className="h-3.5 w-3.5" /> Quick fill test accounts:
           </p>
           <div className="flex flex-wrap gap-1.5">
             <button
@@ -263,7 +262,7 @@ export default function SignIn() {
               onClick={() => fillDemoAccount('hr')}
               className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-200 transition-colors"
             >
-              HR Admin Demo
+              HR / Admin Demo
             </button>
             <button
               type="button"
