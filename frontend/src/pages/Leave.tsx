@@ -3,17 +3,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Icon } from '@iconify/react'
-import Swal from 'sweetalert2'
-import {
-  ArrowLeft,
-  CalendarPlus,
-  Clock,
-  FileText,
-  Paperclip,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react'
 import { ApiError, api } from '@/api/client'
 import type { LeaveBalance, LeaveList, LeaveRequest } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
@@ -22,7 +11,6 @@ import { queuePendingAction } from '@/lib/offlineQueue'
 import { PageHeader } from '@/components/PageHeader'
 import {
   Button,
-  Card,
   ErrorState,
   Field,
   FormBanner,
@@ -43,7 +31,6 @@ export default function Leave() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
   const [withdrawingId, setWithdrawingId] = useState<number | null>(null)
-  const [proofFile, setProofFile] = useState<File | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -71,7 +58,6 @@ export default function Leave() {
     register,
     handleSubmit,
     reset,
-    getValues,
     watch,
     setError,
     formState: { errors, isSubmitting },
@@ -85,24 +71,6 @@ export default function Leave() {
       remarks: '',
     },
   })
-
-
-  const saveDraft = () => {
-    const values = getValues()
-    localStorage.setItem('dayflow.draft.leave', JSON.stringify(values))
-    setOk('Leave application draft saved to your browser.')
-    setTimeout(() => setOk(null), 3000)
-  }
-
-  const handleReset = () => {
-    localStorage.removeItem('dayflow.draft.leave')
-    reset({ leave_type: 'PAID', start_date: isoDate(new Date()), end_date: isoDate(new Date()), remarks: '' })
-    setProofFile(null)
-    setBanner(null)
-    setOk('Form reset to initial defaults.')
-    setTimeout(() => setOk(null), 3000)
-  }
-
 
   const startDateVal = watch('start_date')
   const endDateVal = watch('end_date')
@@ -123,7 +91,6 @@ export default function Leave() {
   }, [startDateVal, endDateVal])
 
   const onSubmit = async (values: LeaveValues) => {
-
     setBanner(null)
     setOk(null)
     if (!navigator.onLine) {
@@ -133,15 +100,10 @@ export default function Leave() {
       }
       await queuePendingAction('LEAVE_REQUEST', payload)
       window.dispatchEvent(new CustomEvent('dayflow:queue-updated'))
-      Swal.fire({
-        icon: 'warning',
-        title: 'Saved Offline!',
-        text: 'You are currently offline. Your leave application has been queued locally with a "Pending Sync" badge and will auto-submit when online.',
-        confirmButtonColor: '#0284c7',
-      })
-      setView('list')
+      setIsModalOpen(false)
       return
     }
+
     try {
       await api.post('/leave/requests', {
         ...values,

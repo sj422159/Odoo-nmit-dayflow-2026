@@ -121,3 +121,25 @@ class AdminCreateRequest(BaseModel):
 class EmployeeApprovalRequest(BaseModel):
     assignment_scope: str = Field(..., pattern="^(overall|department)$")
     department_id: Optional[int] = Field(default=None, ge=1)
+
+
+class CorporateSummaryOut(BaseModel):
+    total_employees: int
+    total_hr_admins: int
+    total_departments: int
+
+
+class HROfficerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    hr_code: str
+    email: str
+    first_name: str
+    last_name: str
+    full_name: str
+    department: str
+    designation: str
+    is_active: bool
+    created_at: datetime
+

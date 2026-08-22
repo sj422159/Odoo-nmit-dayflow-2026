@@ -357,13 +357,34 @@ export interface AILeaveEvaluation {
 }
 
 export interface CompanySettings {
-
   workday_start: string
   workday_minutes: number
   half_day_minutes: number
   annual_paid_leave_days: number
   annual_sick_leave_days: number
 }
+
+
+export interface CorporateSummary {
+  total_employees: number
+  total_hr_admins: number
+  total_departments: number
+}
+
+export interface HROfficer {
+  id: number
+  hr_code: string
+  email: string
+  first_name: string
+  last_name: string
+  full_name: string
+  department: string
+  designation: string
+  is_active: boolean
+  created_at: string
+}
+
+
 
 
 

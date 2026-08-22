@@ -142,6 +142,22 @@ def sign_in(payload: SignInRequest, db: Session = Depends(get_db)):
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email or password is incorrect.")
 
 
+from app.models.department import Department
+from app.schemas.auth import (
+    AdminCreateRequest,
+    CorporateSummaryOut,
+    HROfficerOut,
+    RefreshRequest,
+    ResendVerificationRequest,
+    SessionOut,
+    SignInRequest,
+    SignUpRequest,
+    SignUpResponse,
+    TokenPair,
+    UserOut,
+    VerifyEmailRequest,
+)
+
 @router.post("/admins", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED)
 def create_admin(
     payload: AdminCreateRequest,
@@ -173,6 +189,44 @@ def create_admin(
     db.add(hr)
     db.commit()
     return SignUpResponse(message=f"HR admin access created for {email}.")
+
+
+@router.get("/corporate-summary", response_model=CorporateSummaryOut)
+def get_corporate_summary(
+    db: Session = Depends(get_db),
+    corp_admin: CorpAdmin = Depends(get_current_corporate),
+):
+    total_employees = db.scalar(select(func.count(Employee.id))) or 0
+    total_hr_admins = db.scalar(select(func.count(HROfficer.id))) or 0
+    total_departments = db.scalar(select(func.count(Department.id))) or 0
+    return CorporateSummaryOut(
+        total_employees=total_employees,
+        total_hr_admins=total_hr_admins,
+        total_departments=total_departments,
+    )
+
+
+@router.get("/hr-admins", response_model=list[HROfficerOut])
+def list_hr_admins(
+    db: Session = Depends(get_db),
+    corp_admin: CorpAdmin = Depends(get_current_corporate),
+):
+    return list(db.scalars(select(HROfficer).order_by(HROfficer.created_at.desc())))
+
+
+@router.delete("/hr-admins/{hr_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_hr_admin(
+    hr_id: int,
+    db: Session = Depends(get_db),
+    corp_admin: CorpAdmin = Depends(get_current_corporate),
+):
+    hr = db.get(HROfficer, hr_id)
+    if not hr:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "HR admin not found.")
+    db.delete(hr)
+    db.commit()
+    return None
+
 
 
 @router.post("/refresh", response_model=TokenPair)
