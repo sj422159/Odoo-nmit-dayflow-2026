@@ -230,6 +230,24 @@ def approve_employee(
     return _detail(db, employee, include_salary=True)
 
 
+@router.post("/{employee_id}/reject")
+def reject_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
+    if employee.user.approval_status != "PENDING":
+        raise HTTPException(status.HTTP_409_CONFLICT, "This employee request is no longer pending.")
+    employee.user.approval_status = "REJECTED"
+    employee.user.is_active = False
+    db.commit()
+    bus.publish("employee.access_rejected", {"employee_id": employee.id}, to_user_ids=[employee.user_id])
+    return {"message": "Employee access request rejected."}
+
+
 def _next_overall_code(db: Session) -> str:
     codes = db.scalars(select(User.employee_code).where(User.employee_code.is_not(None))).all()
     numbers = [int(code.split("-")[-1]) for code in codes if code and EMPLOYEE_CODE_RE.match(code)]

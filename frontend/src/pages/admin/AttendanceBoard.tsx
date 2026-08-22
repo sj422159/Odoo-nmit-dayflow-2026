@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { addDays, subDays } from 'date-fns'
 import { ChevronLeft, ChevronRight, ClipboardList, Pencil } from 'lucide-react'
 import { ApiError, api } from '@/api/client'
-import type { AttendanceRecord, AttendanceStatus } from '@/api/types'
+import type { AttendanceRecord, AttendanceStatus, Department } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
@@ -24,11 +24,11 @@ export default function AttendanceBoard() {
   const [day, setDay] = useState(new Date())
   const [department, setDepartment] = useState('')
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | ''>('')
-  const [departments, setDepartments] = useState<string[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [editing, setEditing] = useState<AttendanceRecord | null>(null)
 
   useEffect(() => {
-    api.get<string[]>('/employees/departments').then(setDepartments).catch(() => setDepartments([]))
+    api.get<Department[]>('/employees/departments').then(setDepartments).catch(() => setDepartments([]))
   }, [])
 
   const isoDay = fmtDate(day.toISOString(), 'yyyy-MM-dd')
@@ -64,8 +64,8 @@ export default function AttendanceBoard() {
         <Select value={department} onChange={(e) => setDepartment(e.target.value)} className="w-48">
           <option value="">All departments</option>
           {departments.map((dept) => (
-            <option key={dept} value={dept}>
-              {titleCase(dept)}
+            <option key={dept.id} value={dept.name}>
+              {titleCase(dept.name)}
             </option>
           ))}
         </Select>

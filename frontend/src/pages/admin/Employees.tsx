@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Search, Users, X } from 'lucide-react'
 import { ApiError, api } from '@/api/client'
 import type { Department, EmployeeSummary, Paginated } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
@@ -17,6 +17,7 @@ export default function Employees() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [assignment, setAssignment] = useState<Record<number, string>>({})
   const [approvalError, setApprovalError] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<number | null>(null)
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -59,6 +60,20 @@ export default function Employees() {
     }
   }
 
+  const reject = async (employee: EmployeeSummary) => {
+    if (!window.confirm(`Reject access for ${employee.full_name}?`)) return
+    setApprovalError(null)
+    setRejecting(employee.id)
+    try {
+      await api.post(`/employees/${employee.id}/reject`)
+      await reloadPending()
+    } catch (err) {
+      setApprovalError(err instanceof ApiError ? err.message : 'Unable to reject this request.')
+    } finally {
+      setRejecting(null)
+    }
+  }
+
   return (
     <>
       <PageHeader title="People" description="Every employee, with today's attendance at a glance." />
@@ -87,6 +102,16 @@ export default function Employees() {
                   ))}
                 </Select>
                 <Button size="sm" onClick={() => approve(employee)} icon={<Check className="h-4 w-4" />}>Approve</Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => reject(employee)}
+                  loading={rejecting === employee.id}
+                  aria-label={`Reject access for ${employee.full_name}`}
+                  icon={<X className="h-4 w-4" />}
+                >
+                  Reject
+                </Button>
               </li>
             ))}
           </ul>
