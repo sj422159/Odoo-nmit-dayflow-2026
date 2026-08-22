@@ -1,11 +1,12 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { RealtimeProvider } from '@/context/RealtimeContext'
 import { AppShell } from '@/components/AppShell'
 import { RedirectIfSignedIn, RequireAdmin, RequireAuth, RequireCorporate } from '@/components/RouteGuards'
 import { Skeleton } from '@/components/ui/Primitives'
 
+const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const SignIn = lazy(() => import('@/pages/SignIn'))
 const CorporateHome = lazy(() => import('@/pages/CorporateHome'))
 const SignUp = lazy(() => import('@/pages/SignUp'))
@@ -44,6 +45,8 @@ export default function App() {
       <RealtimeProvider>
         <Suspense fallback={<PageFallback />}>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/landing" element={<LandingPage />} />
             <Route path="/signin" element={<RedirectIfSignedIn><SignIn /></RedirectIfSignedIn>} />
             <Route path="/corporate/signin" element={<RedirectIfSignedIn><SignIn corporate /></RedirectIfSignedIn>} />
             <Route path="/signup" element={<RedirectIfSignedIn><SignUp /></RedirectIfSignedIn>} />
@@ -51,7 +54,6 @@ export default function App() {
             <Route path="/corporate/dashboard" element={<RequireCorporate><CorporateHome /></RequireCorporate>} />
 
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/attendance" element={<Attendance />} />

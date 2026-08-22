@@ -12,11 +12,11 @@ import { Button, Field, FormBanner, Input, Select } from '@/components/ui/Primit
 type AccessType = 'INTERNAL' | 'EXTERNAL'
 type InternalRole = 'EMPLOYEE' | 'HR_ADMIN'
 
-export default function SignIn() {
+export default function SignIn({ corporate = false }: { corporate?: boolean }) {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [accessType, setAccessType] = useState<AccessType>('INTERNAL')
+  const [accessType, setAccessType] = useState<AccessType>(corporate ? 'EXTERNAL' : 'INTERNAL')
   const [internalRole, setInternalRole] = useState<InternalRole>('EMPLOYEE')
   const [banner, setBanner] = useState<string | null>(null)
 
@@ -54,17 +54,17 @@ export default function SignIn() {
     if (role === 'emp') {
       setAccessType('INTERNAL')
       setInternalRole('EMPLOYEE')
-      setValue('email', 'employee@tecryst.com')
-      setValue('password', 'Password@123')
+      setValue('email', 'marcus.lindqvist@dayflow.co')
+      setValue('password', '1234')
     } else if (role === 'hr') {
       setAccessType('INTERNAL')
       setInternalRole('HR_ADMIN')
-      setValue('email', 'hr.admin@tecryst.com')
-      setValue('password', 'Password@123')
+      setValue('email', 'hr@dayflow.co')
+      setValue('password', '1234')
     } else {
       setAccessType('EXTERNAL')
-      setValue('email', 'corp.admin@tecryst.com')
-      setValue('password', 'Password@123')
+      setValue('email', 'admin@gmail.com')
+      setValue('password', '1234')
     }
   }
 
