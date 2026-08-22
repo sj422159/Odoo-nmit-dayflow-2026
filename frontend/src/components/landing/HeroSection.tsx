@@ -368,7 +368,7 @@ function InteractiveDashboardMockup() {
       </div>
 
       {/* Floating Badges */}
-      <div className="absolute -left-6 top-8 z-10 animate-float rounded-xl border border-zim-primary/30 bg-zim-primary px-3.5 py-2.5 shadow-xl hidden sm:block">
+      <div className="absolute -left-36 top-16 z-10 hidden max-w-[190px] animate-float rounded-xl border border-zim-primary/30 bg-zim-primary px-3.5 py-2.5 shadow-xl sm:block">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/70 text-slate-900">
             <Icon icon="mdi:shield-check" className="h-4 w-4" />
@@ -384,7 +384,7 @@ function InteractiveDashboardMockup() {
         </div>
       </div>
 
-      <div className="absolute -right-4 bottom-8 z-10 animate-float-delayed rounded-xl border border-border-subtle bg-white px-3.5 py-2.5 shadow-xl hidden sm:block">
+      <div className="absolute -right-10 -bottom-4 z-10 animate-float-delayed rounded-xl border border-border-subtle bg-white px-3.5 py-2.5 shadow-xl hidden sm:block">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zim-teal-light text-zim-teal">
             <Icon icon="mdi:clock-check" className="h-4 w-4" />
