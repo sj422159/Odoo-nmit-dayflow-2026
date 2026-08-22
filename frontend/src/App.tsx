@@ -60,6 +60,7 @@ export default function App() {
               <Route path="/leave" element={<RequireEmployee><Leave /></RequireEmployee>} />
               <Route path="/payroll" element={<RequireEmployee><Payroll /></RequireEmployee>} />
 
+              <Route path="/admin/dashboard" element={<RequireAdmin><AdminInsights /></RequireAdmin>} />
               <Route path="/admin/employees" element={<RequireAdmin><AdminEmployees /></RequireAdmin>} />
               <Route path="/admin/departments" element={<RequireAdmin><AdminDepartments /></RequireAdmin>} />
               <Route path="/admin/employees/:id" element={<RequireAdmin><AdminEmployeeDetail /></RequireAdmin>} />

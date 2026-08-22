@@ -4,13 +4,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import AnyAccount, get_current_user
 from app.db.session import get_db
+from app.models.corp_admin import CorpAdmin
+from app.models.employee import Employee
+from app.models.hr_officer import HROfficer
 from app.models.notification import Notification
-from app.models.user import User
 from app.schemas.analytics import NotificationOut
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+def _get_recipient_type(account: AnyAccount) -> str:
+    if isinstance(account, CorpAdmin):
+        return "corp_admins"
+    if isinstance(account, HROfficer):
+        return "hr_officers"
+    return "employees"
 
 
 def _out(item: Notification) -> NotificationOut:
@@ -28,11 +38,15 @@ def _out(item: Notification) -> NotificationOut:
 @router.get("", response_model=List[NotificationOut])
 def list_notifications(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    account: AnyAccount = Depends(get_current_user),
     unread_only: bool = False,
     limit: int = Query(30, ge=1, le=100),
 ):
-    stmt = select(Notification).where(Notification.user_id == user.id)
+    rec_type = _get_recipient_type(account)
+    stmt = select(Notification).where(
+        Notification.recipient_type == rec_type,
+        Notification.recipient_id == account.id,
+    )
     if unread_only:
         stmt = stmt.where(Notification.read_at.is_(None))
     rows = db.scalars(stmt.order_by(Notification.created_at.desc()).limit(limit))
@@ -40,19 +54,23 @@ def list_notifications(
 
 
 @router.get("/unread-count")
-def unread_count(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def unread_count(db: Session = Depends(get_db), account: AnyAccount = Depends(get_current_user)):
+    rec_type = _get_recipient_type(account)
     count = db.scalar(
         select(func.count()).select_from(Notification).where(
-            Notification.user_id == user.id, Notification.read_at.is_(None)
+            Notification.recipient_type == rec_type,
+            Notification.recipient_id == account.id,
+            Notification.read_at.is_(None),
         )
     ) or 0
     return {"unread": count}
 
 
 @router.post("/{notification_id}/read", response_model=NotificationOut)
-def mark_read(notification_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def mark_read(notification_id: int, db: Session = Depends(get_db), account: AnyAccount = Depends(get_current_user)):
+    rec_type = _get_recipient_type(account)
     item = db.get(Notification, notification_id)
-    if item is None or item.user_id != user.id:
+    if item is None or item.recipient_type != rec_type or item.recipient_id != account.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No notification with that ID.")
     if item.read_at is None:
         item.read_at = func.now()
@@ -62,10 +80,15 @@ def mark_read(notification_id: int, db: Session = Depends(get_db), user: User = 
 
 
 @router.post("/read-all")
-def mark_all_read(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def mark_all_read(db: Session = Depends(get_db), account: AnyAccount = Depends(get_current_user)):
+    rec_type = _get_recipient_type(account)
     result = db.execute(
         update(Notification)
-        .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+        .where(
+            Notification.recipient_type == rec_type,
+            Notification.recipient_id == account.id,
+            Notification.read_at.is_(None),
+        )
         .values(read_at=func.now())
     )
     db.commit()

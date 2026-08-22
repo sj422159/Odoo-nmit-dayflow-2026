@@ -11,11 +11,12 @@ from sqlalchemy import func, select
 from app.core.security import decode_token
 from app.db.session import SessionLocal
 from app.models.attendance import AttendanceRecord
+from app.models.corp_admin import CorpAdmin
 from app.models.employee import Employee
-from app.models.enums import AttendanceStatus, LeaveStatus, Role
+from app.models.enums import AttendanceStatus, LeaveStatus
+from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveRequest
 from app.models.notification import Notification
-from app.models.user import User
 from app.services.realtime import manager
 
 logger = logging.getLogger("dayflow.ws")
@@ -24,18 +25,21 @@ router = APIRouter(tags=["Realtime"])
 HEARTBEAT_SECONDS = 20
 
 
-def _snapshot(user_id: int, role: str, employee_id):
+def _snapshot(account_id: int, role: str, employee_id):
     """A small state pulse so a reconnecting client is instantly consistent."""
     with SessionLocal() as db:
         today = date.today()
+        rec_type = "corp_admins" if role == "CORPORATE" else ("hr_officers" if role in ("HR_ADMIN", "ADMIN") else "employees")
         unread = db.scalar(
             select(func.count()).select_from(Notification).where(
-                Notification.user_id == user_id, Notification.read_at.is_(None)
+                Notification.recipient_type == rec_type,
+                Notification.recipient_id == account_id,
+                Notification.read_at.is_(None),
             )
         ) or 0
         data = {"unread_notifications": unread, "server_time": datetime.now(timezone.utc).isoformat()}
 
-        if role == Role.ADMIN.value:
+        if role in ("HR_ADMIN", "ADMIN"):
             data["present_today"] = db.scalar(
                 select(func.count()).select_from(AttendanceRecord).where(
                     AttendanceRecord.work_date == today,
@@ -79,28 +83,33 @@ def _snapshot(user_id: int, role: str, employee_id):
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     try:
         payload = decode_token(token, "access")
-        user_id = int(payload["sub"])
+        account_id = int(payload["sub"])
+        role = payload.get("role", "EMPLOYEE")
     except (JWTError, KeyError, ValueError):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
         return
 
     with SessionLocal() as db:
-        user = db.get(User, user_id)
-        if user is None or not user.is_active or not user.is_verified:
+        if role == "CORPORATE":
+            account = db.get(CorpAdmin, account_id)
+        elif role in ("HR_ADMIN", "ADMIN"):
+            account = db.get(HROfficer, account_id)
+        else:
+            account = db.get(Employee, account_id)
+
+        if account is None or not account.is_active or not account.is_verified:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Account not available")
             return
-        employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
-        employee_id = employee.id if employee else None
-        role = user.role
+        employee_id = account.id if isinstance(account, Employee) else None
 
-    conn = await manager.connect(websocket, user_id, role, employee_id)
-    await manager.send_to(conn, {"event": "connected", "payload": _snapshot(user_id, role, employee_id)})
+    conn = await manager.connect(websocket, account_id, role, employee_id)
+    await manager.send_to(conn, {"event": "connected", "payload": _snapshot(account_id, role, employee_id)})
 
     async def pulse():
         while True:
             await asyncio.sleep(HEARTBEAT_SECONDS)
             ok = await manager.send_to(
-                conn, {"event": "snapshot", "payload": _snapshot(user_id, role, employee_id)}
+                conn, {"event": "snapshot", "payload": _snapshot(account_id, role, employee_id)}
             )
             if not ok:
                 break
@@ -117,12 +126,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 await manager.send_to(conn, {"event": "pong", "payload": {}})
             elif message.get("action") == "refresh":
                 await manager.send_to(
-                    conn, {"event": "snapshot", "payload": _snapshot(user_id, role, employee_id)}
+                    conn, {"event": "snapshot", "payload": _snapshot(account_id, role, employee_id)}
                 )
     except WebSocketDisconnect:
         pass
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("WS error for user %s: %s", user_id, exc)
+    except Exception as exc:
+        logger.warning("WS error for user %s: %s", account_id, exc)
     finally:
         pulse_task.cancel()
         await manager.disconnect(conn)

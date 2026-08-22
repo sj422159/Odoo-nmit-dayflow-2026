@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  BarChart3,
   CalendarCheck,
   CalendarDays,
   Building2,
@@ -39,13 +38,12 @@ const EMPLOYEE_NAV: NavItem[] = [
 ]
 
 const ADMIN_NAV: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/insights', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/employees', label: 'People', icon: Users, badge: 'access' },
   { to: '/admin/departments', label: 'Department creation', icon: Building2 },
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/admin/leave', label: 'Approvals', icon: CalendarDays, badge: 'pending' },
   { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
-  { to: '/admin/insights', label: 'Insights', icon: BarChart3 },
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 

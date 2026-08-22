@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -15,32 +15,36 @@ class Employee(Base, TimestampMixin):
             "employment_type IN ('FULL_TIME','PART_TIME','CONTRACT','INTERN')",
             name="ck_employees_employment_type",
         ),
+        Index("ix_employees_email_lower", "email", unique=True),
+        Index("ix_employees_employee_code", "employee_code"),
+        Index("ix_employees_department", "department"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True
-    )
+    employee_code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     first_name: Mapped[str] = mapped_column(String(80), nullable=False)
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    department: Mapped[str] = mapped_column(String(80), nullable=False, default="Unassigned", index=True)
-    department_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    department: Mapped[str] = mapped_column(String(80), nullable=False, default="Unassigned")
     designation: Mapped[str] = mapped_column(String(80), nullable=False, default="Associate")
     employment_type: Mapped[str] = mapped_column(
         String(16), nullable=False, default=EmploymentType.FULL_TIME.value
     )
     date_of_joining: Mapped[date] = mapped_column(Date, nullable=False)
+    hr_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("hr_officers.id", ondelete="SET NULL"), nullable=True
+    )
     manager_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
     )
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="employee")  # noqa: F821
-    department_record: Mapped[Optional["Department"]] = relationship(back_populates="employees")  # noqa: F821
     manager: Mapped[Optional["Employee"]] = relationship(remote_side="Employee.id")
     documents: Mapped[List["EmployeeDocument"]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"
@@ -50,6 +54,10 @@ class Employee(Base, TimestampMixin):
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}".strip()
 
+    @property
+    def role(self) -> str:
+        return "EMPLOYEE"
+
 
 class EmployeeDocument(Base, TimestampMixin):
     __tablename__ = "employee_documents"
@@ -58,8 +66,9 @@ class EmployeeDocument(Base, TimestampMixin):
     employee_id: Mapped[int] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    title: Mapped[str] = mapped_column(String(120), nullable=False)
-    category: Mapped[str] = mapped_column(String(60), nullable=False, default="General")
-    file_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     employee: Mapped["Employee"] = relationship(back_populates="documents")

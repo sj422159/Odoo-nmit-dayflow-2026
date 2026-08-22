@@ -1,7 +1,5 @@
-from typing import List
-
 from sqlalchemy import Boolean, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
 
@@ -14,5 +12,3 @@ class Department(Base, TimestampMixin):
     code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False)
     next_employee_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    employees: Mapped[List["Employee"]] = relationship(back_populates="department_record")  # noqa: F821

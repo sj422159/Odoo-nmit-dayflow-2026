@@ -7,7 +7,7 @@ export function getRolePath(session: Session | null): string {
   if (!session) return '/signin'
   const role = session.user.role
   if (role === 'CORPORATE') return '/corporate/dashboard'
-  if (role === 'HR_ADMIN' || role === 'ADMIN') return '/admin/employees'
+  if (role === 'HR_ADMIN' || role === 'ADMIN') return '/admin/insights'
   return '/dashboard'
 }
 

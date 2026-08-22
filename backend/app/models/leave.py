@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Str
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
-from app.models.enums import LeaveStatus, LeaveType
+from app.models.enums import LeaveStatus
 
 
 class LeaveRequest(Base, TimestampMixin):
@@ -32,13 +32,13 @@ class LeaveRequest(Base, TimestampMixin):
         String(16), nullable=False, default=LeaveStatus.PENDING.value, index=True
     )
     reviewer_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("hr_officers.id", ondelete="SET NULL"), nullable=True
     )
     review_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     employee: Mapped["Employee"] = relationship()  # noqa: F821
-    reviewer: Mapped[Optional["User"]] = relationship()  # noqa: F821
+    reviewer: Mapped[Optional["HROfficer"]] = relationship()  # noqa: F821
 
 
 class LeaveBalance(Base, TimestampMixin):

@@ -6,14 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.api.deps import AnyAccount, get_current_admin, get_current_employee, get_current_user
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
 from app.models.department import Department
 from app.models.employee import Employee
-from app.models.enums import Role
-from app.models.user import User
+from app.models.hr_officer import HROfficer
+from app.schemas.auth import EMPLOYEE_CODE_RE, EmployeeApprovalRequest
 from app.schemas.employee import (
+    DepartmentCreate,
+    DepartmentOut,
     DocumentOut,
     EmployeeAdminUpdate,
     EmployeeDetail,
@@ -21,12 +23,9 @@ from app.schemas.employee import (
     EmployeeSummary,
     PaginatedEmployees,
     SalaryStructureOut,
-    DepartmentCreate,
-    DepartmentOut,
 )
 from app.services.payroll_service import current_structure
 from app.services.realtime import bus
-from app.schemas.auth import EMPLOYEE_CODE_RE, EmployeeApprovalRequest
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
@@ -34,59 +33,78 @@ router = APIRouter(prefix="/employees", tags=["Employees"])
 def _summary(employee: Employee, today_status: Optional[str] = None) -> EmployeeSummary:
     return EmployeeSummary(
         id=employee.id,
-        employee_code=employee.user.employee_code,
+        employee_code=employee.employee_code,
         full_name=employee.full_name,
-        email=employee.user.email,
+        email=employee.email,
         department=employee.department,
         designation=employee.designation,
         employment_type=employee.employment_type,
-        role=employee.user.role,
-        is_active=employee.user.is_active,
+        role=employee.role,
+        is_active=employee.is_active,
         avatar_url=employee.avatar_url,
         today_status=today_status,
     )
 
 
 def _detail(db: Session, employee: Employee, include_salary: bool) -> EmployeeDetail:
-    salary = current_structure(db, employee.id) if include_salary else None
-    manager = db.get(Employee, employee.manager_id) if employee.manager_id else None
+    sal = current_structure(db, employee.id) if include_salary else None
     return EmployeeDetail(
-        **_summary(employee).model_dump(),
+        id=employee.id,
+        employee_code=employee.employee_code,
+        full_name=employee.full_name,
         first_name=employee.first_name,
         last_name=employee.last_name,
+        email=employee.email,
         phone=employee.phone,
         address=employee.address,
+        department=employee.department,
+        designation=employee.designation,
+        employment_type=employee.employment_type,
         date_of_joining=employee.date_of_joining,
-        manager_name=manager.full_name if manager else None,
-        is_verified=employee.user.is_verified,
-        salary=SalaryStructureOut.model_validate(salary) if salary else None,
-        documents=[DocumentOut.model_validate(d) for d in employee.documents],
+        role=employee.role,
+        is_active=employee.is_active,
+        is_verified=employee.is_verified,
+        approval_status="APPROVED",
+        avatar_url=employee.avatar_url,
+        manager_id=employee.manager_id,
+        manager_name=employee.manager.full_name if employee.manager else None,
+        salary_structure=SalaryStructureOut.model_validate(sal) if sal else None,
+        documents=[
+            DocumentOut(
+                id=doc.id,
+                document_type=doc.document_type,
+                file_path=doc.file_path,
+                original_filename=doc.original_filename,
+                uploaded_at=doc.uploaded_at,
+            )
+            for doc in employee.documents
+        ],
     )
 
 
 @router.get("/me", response_model=EmployeeDetail)
-def read_my_profile(employee: Employee = Depends(get_current_employee), db: Session = Depends(get_db)):
+def read_current_employee_profile(
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
     return _detail(db, employee, include_salary=True)
 
 
 @router.patch("/me", response_model=EmployeeDetail)
-def update_my_profile(
+def update_current_employee_profile(
     payload: EmployeeSelfUpdate,
-    employee: Employee = Depends(get_current_employee),
     db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
 ):
-    """Employees may change contact details and their picture only."""
     data = payload.model_dump(exclude_unset=True)
-    if not data:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to save — change a field first.")
     for field, value in data.items():
         setattr(employee, field, value)
     db.commit()
     db.refresh(employee)
     bus.publish(
         "employee.updated",
-        {"employee_id": employee.id, "full_name": employee.full_name, "by": "self"},
-        to_user_ids=[employee.user_id],
+        {"employee_id": employee.id, "full_name": employee.full_name},
+        to_user_ids=[employee.id],
     )
     return _detail(db, employee, include_salary=True)
 
@@ -94,28 +112,28 @@ def update_my_profile(
 @router.get("", response_model=PaginatedEmployees)
 def list_employees(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
     search: Optional[str] = Query(None, max_length=80, description="Name, email or employee ID"),
     department: Optional[str] = Query(None, max_length=80),
     is_active: Optional[bool] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
-    stmt = select(Employee).join(Employee.user)
+    stmt = select(Employee)
     if search:
         term = f"%{search.strip().lower()}%"
         stmt = stmt.where(
             or_(
                 func.lower(Employee.first_name).like(term),
                 func.lower(Employee.last_name).like(term),
-                func.lower(User.email).like(term),
-                func.lower(User.employee_code).like(term),
+                func.lower(Employee.email).like(term),
+                func.lower(Employee.employee_code).like(term),
             )
         )
     if department:
         stmt = stmt.where(Employee.department == department)
     if is_active is not None:
-        stmt = stmt.where(User.is_active == is_active)
+        stmt = stmt.where(Employee.is_active == is_active)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = list(
@@ -149,12 +167,12 @@ def list_employees(
 @router.get("/pending-access", response_model=PaginatedEmployees)
 def list_pending_access(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
 ):
     employees = list(
         db.scalars(
-            select(Employee).join(Employee.user)
-            .where(User.approval_status == "PENDING")
+            select(Employee)
+            .where(Employee.is_verified.is_(False))
             .order_by(Employee.created_at)
         )
     )
@@ -168,7 +186,7 @@ def list_pending_access(
 
 
 @router.get("/departments", response_model=list[DepartmentOut])
-def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_departments(db: Session = Depends(get_db), _: AnyAccount = Depends(get_current_user)):
     return list(db.scalars(select(Department).where(Department.is_active.is_(True)).order_by(Department.name)))
 
 
@@ -176,7 +194,7 @@ def list_departments(db: Session = Depends(get_db), _: User = Depends(get_curren
 def create_department(
     payload: DepartmentCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
 ):
     if db.scalar(select(Department).where(or_(Department.name == payload.name, Department.code == payload.code))):
         raise HTTPException(status.HTTP_409_CONFLICT, "That department name or code already exists.")
@@ -189,7 +207,7 @@ def create_department(
 
 @router.get("/{employee_id}", response_model=EmployeeDetail)
 def read_employee(
-    employee_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_admin)
+    employee_id: int, db: Session = Depends(get_db), _: HROfficer = Depends(get_current_admin)
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -202,12 +220,12 @@ def approve_employee(
     employee_id: int,
     payload: EmployeeApprovalRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
-    if employee.user.approval_status == "APPROVED":
+    if employee.is_verified:
         raise HTTPException(status.HTTP_409_CONFLICT, "This employee already has access.")
     if payload.assignment_scope == "department":
         if payload.department_id is None:
@@ -221,12 +239,12 @@ def approve_employee(
         department.next_employee_number += 1
     else:
         employee_code = _next_overall_code(db)
-    employee.user.employee_code = employee_code
-    employee.user.approval_status = "APPROVED"
-    employee.user.is_active = True
+    employee.employee_code = employee_code
+    employee.is_verified = True
+    employee.is_active = True
     db.commit()
     db.refresh(employee)
-    bus.publish("employee.access_approved", {"employee_id": employee.id}, to_user_ids=[employee.user_id])
+    bus.publish("employee.access_approved", {"employee_id": employee.id}, to_user_ids=[employee.id])
     return _detail(db, employee, include_salary=True)
 
 
@@ -234,22 +252,19 @@ def approve_employee(
 def reject_employee(
     employee_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    _: HROfficer = Depends(get_current_admin),
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
-    if employee.user.approval_status != "PENDING":
-        raise HTTPException(status.HTTP_409_CONFLICT, "This employee request is no longer pending.")
-    employee.user.approval_status = "REJECTED"
-    employee.user.is_active = False
+    employee.is_active = False
     db.commit()
-    bus.publish("employee.access_rejected", {"employee_id": employee.id}, to_user_ids=[employee.user_id])
+    bus.publish("employee.access_rejected", {"employee_id": employee.id}, to_user_ids=[employee.id])
     return {"message": "Employee access request rejected."}
 
 
 def _next_overall_code(db: Session) -> str:
-    codes = db.scalars(select(User.employee_code).where(User.employee_code.is_not(None))).all()
+    codes = db.scalars(select(Employee.employee_code).where(Employee.employee_code.is_not(None))).all()
     numbers = [int(code.split("-")[-1]) for code in codes if code and EMPLOYEE_CODE_RE.match(code)]
     return f"DF-{max(numbers, default=0) + 1:04d}"
 
@@ -259,7 +274,7 @@ def update_employee(
     employee_id: int,
     payload: EmployeeAdminUpdate,
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    admin: HROfficer = Depends(get_current_admin),
 ):
     employee = db.get(Employee, employee_id)
     if employee is None:
@@ -269,7 +284,6 @@ def update_employee(
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to save — change a field first.")
 
-    role = data.pop("role", None)
     is_active = data.pop("is_active", None)
     manager_id = data.pop("manager_id", "__unset__")
 
@@ -283,20 +297,14 @@ def update_employee(
     for field, value in data.items():
         setattr(employee, field, value)
 
-    if role is not None:
-        if employee.user.id == admin.id and role != Role.ADMIN:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot remove your own admin access.")
-        employee.user.role = role.value
     if is_active is not None:
-        if employee.user.id == admin.id and not is_active:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot deactivate your own account.")
-        employee.user.is_active = is_active
+        employee.is_active = is_active
 
     db.commit()
     db.refresh(employee)
     bus.publish(
         "employee.updated",
         {"employee_id": employee.id, "full_name": employee.full_name, "by": "admin"},
-        to_user_ids=[employee.user_id],
+        to_user_ids=[employee.id],
     )
     return _detail(db, employee, include_salary=True)
