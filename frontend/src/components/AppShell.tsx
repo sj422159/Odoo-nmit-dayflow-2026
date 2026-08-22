@@ -5,6 +5,8 @@ import {
   CalendarCheck,
   CalendarDays,
   Building2,
+  ChevronDown,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -21,19 +23,43 @@ import { NotificationBell } from '@/components/NotificationBell'
 import { initials } from '@/lib/format'
 import { cx } from '@/components/ui/Primitives'
 
+interface NavSubItem {
+  to: string
+  label: string
+}
+
 interface NavItem {
   to: string
   label: string
   icon: typeof LayoutDashboard
   end?: boolean
   badge?: 'pending' | 'access'
+  children?: NavSubItem[]
 }
 
 const EMPLOYEE_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/leave', label: 'Time off', icon: CalendarDays },
-  { to: '/payroll', label: 'Pay', icon: Wallet },
+  { to: '/payroll', label: 'Payslips', icon: Wallet },
+  {
+    to: '/analysis',
+    label: 'Analysis',
+    icon: BarChart3,
+    children: [
+      { to: '/analysis/attendance', label: 'Attendance' },
+      { to: '/analysis/payslip', label: 'Payslip' },
+    ],
+  },
+  {
+    to: '/reports',
+    label: 'Reports',
+    icon: FileSpreadsheet,
+    children: [
+      { to: '/reports/attendance', label: 'Attendance' },
+      { to: '/reports/payslip', label: 'Payslip' },
+    ],
+  },
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
@@ -53,6 +79,10 @@ export function AppShell() {
   const { snapshot, subscribe } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
   const [pendingAccess, setPendingAccess] = useState(0)
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
+    '/analysis': true,
+    '/reports': true,
+  })
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -81,14 +111,91 @@ export function AppShell() {
     }
   }, [menuOpen])
 
+  // Automatically keep dropdown open if current path matches
+  useEffect(() => {
+    if (location.pathname.startsWith('/analysis')) {
+      setOpenDropdowns((prev) => ({ ...prev, '/analysis': true }))
+    }
+    if (location.pathname.startsWith('/reports')) {
+      setOpenDropdowns((prev) => ({ ...prev, '/reports': true }))
+    }
+  }, [location.pathname])
+
   const handleSignOut = () => {
     signOut()
     navigate('/signin', { replace: true })
   }
 
+  const toggleDropdown = (key: string, defaultTo?: string) => {
+    setOpenDropdowns((prev) => {
+      const nextState = !prev[key]
+      if (nextState && defaultTo && !location.pathname.startsWith(key)) {
+        navigate(defaultTo)
+      }
+      return { ...prev, [key]: nextState }
+    })
+  }
+
   const link = (item: NavItem, compact = false) => {
     const Icon = item.icon
     const count = item.badge === 'pending' ? pending : item.badge === 'access' ? pendingAccess : 0
+
+    // Handle Dropdown with Children (e.g. Analysis -> Attendance / Payslip)
+    if (item.children && item.children.length > 0) {
+      const isExpanded = !!openDropdowns[item.to]
+      const isParentActive = location.pathname.startsWith(item.to)
+
+      return (
+        <div key={item.to} className="flex flex-col">
+          <button
+            type="button"
+            onClick={() => toggleDropdown(item.to, item.children?.[0]?.to)}
+            className={cx(
+              'group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
+              compact ? 'w-full' : '',
+              isParentActive
+                ? 'bg-white/10 text-white'
+                : 'text-white/60 hover:bg-white/5 hover:text-white',
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+              <span>{item.label}</span>
+            </div>
+            <ChevronDown
+              className={cx(
+                'h-4 w-4 shrink-0 text-white/50 transition-transform duration-200',
+                isExpanded ? 'rotate-180 text-white' : '',
+              )}
+            />
+          </button>
+
+          {/* Sub-items dropdown */}
+          {isExpanded && (
+            <div className="ml-5 mt-1 flex flex-col gap-1 border-l border-white/10 pl-2.5">
+              {item.children.map((sub) => (
+                <NavLink
+                  key={sub.to}
+                  to={sub.to}
+                  className={({ isActive }) =>
+                    cx(
+                      'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold',
+                      isActive
+                        ? 'bg-white/10 text-white font-bold'
+                        : 'text-white/60 hover:bg-white/5 hover:text-white',
+                    )
+                  }
+                >
+                  <span className={cx("h-1.5 w-1.5 rounded-full", sub.to === location.pathname ? "bg-flow-400" : "bg-white/40")} />
+                  <span>{sub.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
     return (
       <NavLink
         key={item.to}
@@ -218,15 +325,16 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        {/* Mobile tab bar — the five destinations people actually use daily */}
+        {/* Mobile tab bar — the destinations people actually use daily */}
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-150 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
           {items.slice(0, 5).map((item) => {
             const Icon = item.icon
             const count = item.badge === 'pending' ? pending : item.badge === 'access' ? pendingAccess : 0
+            const destination = item.children && item.children.length > 0 ? item.children[0].to : item.to
             return (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={destination}
                 end={item.end}
                 className={({ isActive }) =>
                   cx(
