@@ -12,7 +12,9 @@ class StrEnum(str, Enum):
 
 
 class Role(StrEnum):
-    ADMIN = "ADMIN"      # HR officer / administrator
+    CORPORATE = "CORPORATE"
+    HR_ADMIN = "HR_ADMIN"
+    ADMIN = "ADMIN"      # Legacy HR administrator value
     EMPLOYEE = "EMPLOYEE"
 
 

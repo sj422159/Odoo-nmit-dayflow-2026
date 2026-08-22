@@ -44,7 +44,7 @@ LAST_NAMES = [
     "Farouk", "Osei", "Costa", "Bianchi", "Novak", "Keller",
 ]
 
-PASSWORD = "Dayflow#2026"
+PASSWORD = "1234"
 
 
 def wipe(db):
@@ -63,6 +63,7 @@ def make_user(db, code, email, role, first, last, dept, title, joined):
         role=role.value,
         is_verified=True,
         is_active=True,
+        approval_status="APPROVED",
     )
     db.add(user)
     db.flush()
@@ -82,6 +83,20 @@ def make_user(db, code, email, role, first, last, dept, title, joined):
     db.add(employee)
     db.flush()
     return user, employee
+
+
+def make_corporate_user(db):
+    user = User(
+        email="admin@gmail.com",
+        hashed_password=hash_password(PASSWORD),
+        role=Role.CORPORATE.value,
+        is_verified=True,
+        is_active=True,
+        approval_status="APPROVED",
+    )
+    db.add(user)
+    db.flush()
+    return user
 
 
 def seed_attendance(db, employee: Employee, days: int):
@@ -193,8 +208,9 @@ def main(reset: bool, employee_count: int, history_days: int):
             return
 
         joined = date.today() - timedelta(days=history_days + 60)
+        corporate_user = make_corporate_user(db)
         admin_user, admin_employee = make_user(
-            db, "DF-1000", "hr@dayflow.co", Role.ADMIN, "Amara", "Njoku",
+            db, "DF-1000", "hr@dayflow.co", Role.HR_ADMIN, "Amara", "Njoku",
             "People Ops", "HR Officer", joined,
         )
         db.add(SalaryStructure(
@@ -264,7 +280,8 @@ def main(reset: bool, employee_count: int, history_days: int):
         db.commit()
 
         print("\nSeed complete.")
-        print(f"  Admin    : hr@dayflow.co / {PASSWORD}")
+        print(f"  Corporate: admin@gmail.com / {PASSWORD}")
+        print(f"  HR admin : hr@dayflow.co / {PASSWORD}")
         print(f"  Employee : {employees[1].user.email} / {PASSWORD}")
         print(f"  {len(employees)} people, {history_days} days of attendance history.")
     finally:

@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       session,
       loading,
-      isAdmin: session?.user.role === 'ADMIN',
+      isAdmin: session?.user.role === 'HR_ADMIN' || session?.user.role === 'ADMIN',
       signIn,
       signOut,
       refreshSession: loadSession,

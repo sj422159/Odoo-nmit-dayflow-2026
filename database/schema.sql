@@ -1,52 +1,87 @@
--- Reference DDL for Dayflow HRMS.
+-- Reference DDL for Dayflow HRMS (Decentralized Identity & Role Architecture).
 -- Alembic owns the live schema (`alembic upgrade head`); this file mirrors it
 -- for review and for tools that read plain SQL. Do not run both.
 
-CREATE TABLE users (
+CREATE TABLE corp_admins (
     id                SERIAL PRIMARY KEY,
-    employee_code     VARCHAR(24)  NOT NULL UNIQUE,
-    email             VARCHAR(255) NOT NULL,
+    admin_code        VARCHAR(30)  NOT NULL UNIQUE,
+    email             VARCHAR(255) NOT NULL UNIQUE,
     hashed_password   VARCHAR(255) NOT NULL,
-    role              VARCHAR(16)  NOT NULL DEFAULT 'EMPLOYEE',
+    first_name        VARCHAR(80)  NOT NULL,
+    last_name         VARCHAR(80)  NOT NULL,
+    phone             VARCHAR(24),
+    avatar_url        VARCHAR(512),
+    is_verified       BOOLEAN      NOT NULL DEFAULT FALSE,
+    is_active         BOOLEAN      NOT NULL DEFAULT TRUE,
+    last_login_at     TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ix_corp_admins_email_lower ON corp_admins (LOWER(email));
+CREATE INDEX ix_corp_admins_admin_code ON corp_admins (admin_code);
+
+CREATE TABLE hr_officers (
+    id                      SERIAL PRIMARY KEY,
+    hr_code                 VARCHAR(30)  NOT NULL UNIQUE,
+    email                   VARCHAR(255) NOT NULL UNIQUE,
+    hashed_password         VARCHAR(255) NOT NULL,
+    first_name              VARCHAR(80)  NOT NULL,
+    last_name               VARCHAR(80)  NOT NULL,
+    phone                   VARCHAR(24),
+    department              VARCHAR(80)  NOT NULL DEFAULT 'Human Resources',
+    designation             VARCHAR(80)  NOT NULL DEFAULT 'HR Officer',
+    avatar_url              VARCHAR(512),
+    created_by_corpadmin_id INTEGER REFERENCES corp_admins(id) ON DELETE SET NULL,
+    is_verified             BOOLEAN      NOT NULL DEFAULT FALSE,
+    is_active               BOOLEAN      NOT NULL DEFAULT TRUE,
+    last_login_at           TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ix_hr_officers_email_lower ON hr_officers (LOWER(email));
+CREATE INDEX ix_hr_officers_hr_code ON hr_officers (hr_code);
+
+CREATE TABLE employees (
+    id                SERIAL PRIMARY KEY,
+    employee_code     VARCHAR(30)  NOT NULL UNIQUE,
+    email             VARCHAR(255) NOT NULL UNIQUE,
+    hashed_password   VARCHAR(255) NOT NULL,
+    first_name        VARCHAR(80)  NOT NULL,
+    last_name         VARCHAR(80)  NOT NULL,
+    phone             VARCHAR(24),
+    address           TEXT,
+    avatar_url        VARCHAR(512),
+    department        VARCHAR(80)  NOT NULL DEFAULT 'Unassigned',
+    designation       VARCHAR(80)  NOT NULL DEFAULT 'Associate',
+    employment_type   VARCHAR(16)  NOT NULL DEFAULT 'FULL_TIME',
+    date_of_joining   DATE         NOT NULL,
+    hr_id             INTEGER REFERENCES hr_officers(id) ON DELETE SET NULL,
+    manager_id        INTEGER REFERENCES employees(id) ON DELETE SET NULL,
     is_verified       BOOLEAN      NOT NULL DEFAULT FALSE,
     is_active         BOOLEAN      NOT NULL DEFAULT TRUE,
     last_login_at     TIMESTAMPTZ,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CONSTRAINT ck_users_role CHECK (role IN ('ADMIN','EMPLOYEE'))
-);
-CREATE UNIQUE INDEX ix_users_email_lower ON users (email);
-CREATE INDEX ix_users_employee_code ON users (employee_code);
-
-CREATE TABLE employees (
-    id                SERIAL PRIMARY KEY,
-    user_id           INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    first_name        VARCHAR(80) NOT NULL,
-    last_name         VARCHAR(80) NOT NULL,
-    phone             VARCHAR(24),
-    address           TEXT,
-    avatar_url        VARCHAR(512),
-    department        VARCHAR(80) NOT NULL DEFAULT 'Unassigned',
-    designation       VARCHAR(80) NOT NULL DEFAULT 'Associate',
-    employment_type   VARCHAR(16) NOT NULL DEFAULT 'FULL_TIME',
-    date_of_joining   DATE NOT NULL,
-    manager_id        INTEGER REFERENCES employees(id) ON DELETE SET NULL,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_employees_employment_type
         CHECK (employment_type IN ('FULL_TIME','PART_TIME','CONTRACT','INTERN'))
 );
+CREATE UNIQUE INDEX ix_employees_email_lower ON employees (LOWER(email));
+CREATE INDEX ix_employees_employee_code ON employees (employee_code);
 CREATE INDEX ix_employees_department ON employees (department);
 
 CREATE TABLE employee_documents (
-    id           SERIAL PRIMARY KEY,
-    employee_id  INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-    title        VARCHAR(120) NOT NULL,
-    category     VARCHAR(60)  NOT NULL DEFAULT 'General',
-    file_url     VARCHAR(512) NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                SERIAL PRIMARY KEY,
+    employee_id       INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    document_type     VARCHAR(60) NOT NULL,
+    file_path         VARCHAR(512) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    uploaded_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_employee_document_type UNIQUE (employee_id, document_type),
+    CONSTRAINT ck_employee_document_type
+        CHECK (document_type IN ('PAN_CARD','BANK_DETAILS','ADDRESS_PROOF','EXPERIENCE_LETTER','AADHAAR_CARD'))
 );
+CREATE INDEX ix_employee_documents_employee_id ON employee_documents (employee_id);
 
 CREATE TABLE attendance_records (
     id             SERIAL PRIMARY KEY,
@@ -75,7 +110,8 @@ CREATE TABLE leave_requests (
     days            INTEGER NOT NULL,
     remarks         TEXT,
     status          VARCHAR(16) NOT NULL DEFAULT 'PENDING',
-    reviewer_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewer_type   VARCHAR(20),
+    reviewer_id     INTEGER,
     review_comment  TEXT,
     reviewed_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -139,14 +175,15 @@ CREATE TABLE payslips (
 );
 
 CREATE TABLE notifications (
-    id          SERIAL PRIMARY KEY,
-    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category    VARCHAR(32) NOT NULL DEFAULT 'general',
-    title       VARCHAR(160) NOT NULL,
-    body        TEXT,
-    link        VARCHAR(255),
-    read_at     TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id              SERIAL PRIMARY KEY,
+    recipient_type  VARCHAR(20) NOT NULL DEFAULT 'EMPLOYEE',
+    recipient_id    INTEGER NOT NULL,
+    category        VARCHAR(32) NOT NULL DEFAULT 'general',
+    title           VARCHAR(160) NOT NULL,
+    body            TEXT,
+    link            VARCHAR(255),
+    read_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_notifications_user_id ON notifications (user_id);
+CREATE INDEX ix_notifications_recipient ON notifications (recipient_type, recipient_id);

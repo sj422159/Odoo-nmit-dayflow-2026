@@ -31,6 +31,14 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+export function RequireCorporate({ children }: { children: ReactNode }) {
+  const { session, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/corporate/signin" replace />
+  if (session.user.role !== 'CORPORATE') return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
 export function RedirectIfSignedIn({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
   if (loading) return <Splash />

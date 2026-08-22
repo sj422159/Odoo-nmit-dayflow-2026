@@ -3,10 +3,11 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { RealtimeProvider } from '@/context/RealtimeContext'
 import { AppShell } from '@/components/AppShell'
-import { RedirectIfSignedIn, RequireAdmin, RequireAuth } from '@/components/RouteGuards'
+import { RedirectIfSignedIn, RequireAdmin, RequireAuth, RequireCorporate } from '@/components/RouteGuards'
 import { Skeleton } from '@/components/ui/Primitives'
 
 const SignIn = lazy(() => import('@/pages/SignIn'))
+const CorporateHome = lazy(() => import('@/pages/CorporateHome'))
 const SignUp = lazy(() => import('@/pages/SignUp'))
 const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
@@ -15,6 +16,7 @@ const Attendance = lazy(() => import('@/pages/Attendance'))
 const Leave = lazy(() => import('@/pages/Leave'))
 const Payroll = lazy(() => import('@/pages/Payroll'))
 const AdminEmployees = lazy(() => import('@/pages/admin/Employees'))
+const AdminDepartments = lazy(() => import('@/pages/admin/DepartmentCreation'))
 const AdminEmployeeDetail = lazy(() => import('@/pages/admin/EmployeeDetail'))
 const AdminAttendance = lazy(() => import('@/pages/admin/AttendanceBoard'))
 const AdminLeave = lazy(() => import('@/pages/admin/LeaveApprovals'))
@@ -43,8 +45,10 @@ export default function App() {
         <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/signin" element={<RedirectIfSignedIn><SignIn /></RedirectIfSignedIn>} />
+            <Route path="/corporate/signin" element={<RedirectIfSignedIn><SignIn corporate /></RedirectIfSignedIn>} />
             <Route path="/signup" element={<RedirectIfSignedIn><SignUp /></RedirectIfSignedIn>} />
             <Route path="/verify" element={<VerifyEmail />} />
+            <Route path="/corporate/dashboard" element={<RequireCorporate><CorporateHome /></RequireCorporate>} />
 
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
               <Route index element={<Navigate to="/dashboard" replace />} />
@@ -55,6 +59,7 @@ export default function App() {
               <Route path="/payroll" element={<Payroll />} />
 
               <Route path="/admin/employees" element={<RequireAdmin><AdminEmployees /></RequireAdmin>} />
+              <Route path="/admin/departments" element={<RequireAdmin><AdminDepartments /></RequireAdmin>} />
               <Route path="/admin/employees/:id" element={<RequireAdmin><AdminEmployeeDetail /></RequireAdmin>} />
               <Route path="/admin/attendance" element={<RequireAdmin><AdminAttendance /></RequireAdmin>} />
               <Route path="/admin/leave" element={<RequireAdmin><AdminLeave /></RequireAdmin>} />

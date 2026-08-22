@@ -25,11 +25,7 @@ export const signInSchema = z.object({
 
 export const signUpSchema = z
   .object({
-    employee_code: z
-      .string()
-      .min(1, 'Enter your employee ID.')
-      .transform((v) => v.trim().toUpperCase())
-      .pipe(z.string().regex(/^[A-Z]{2,4}-?\d{3,6}$/, 'Employee IDs look like DF-1042.')),
+    organization: z.string().min(1, 'Please specify your organization.'),
     email: z.string().min(1, 'Enter your work email.').email('That does not look like an email address.'),
     first_name: z
       .string()
@@ -107,7 +103,7 @@ export const adminEmployeeSchema = z.object({
   designation: z.string().min(2, 'Enter a job title.'),
   employment_type: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
   date_of_joining: z.string().min(1, 'Pick a joining date.'),
-  role: z.enum(['EMPLOYEE', 'ADMIN']),
+  role: z.enum(['CORPORATE', 'HR_ADMIN', 'ADMIN', 'EMPLOYEE']),
   is_active: z.boolean(),
   phone: z.string().or(z.literal('')),
   address: z.string().or(z.literal('')),

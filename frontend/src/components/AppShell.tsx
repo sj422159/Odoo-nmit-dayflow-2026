@@ -4,6 +4,7 @@ import {
   BarChart3,
   CalendarCheck,
   CalendarDays,
+  Building2,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/context/RealtimeContext'
+import { api } from '@/api/client'
+import type { EmployeeSummary, Paginated } from '@/api/types'
 import { LiveBadge } from '@/components/LiveBadge'
 import { NotificationBell } from '@/components/NotificationBell'
 import { initials } from '@/lib/format'
@@ -24,7 +27,7 @@ interface NavItem {
   label: string
   icon: typeof LayoutDashboard
   end?: boolean
-  badge?: 'pending'
+  badge?: 'pending' | 'access'
 }
 
 const EMPLOYEE_NAV: NavItem[] = [
@@ -37,7 +40,8 @@ const EMPLOYEE_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/employees', label: 'People', icon: Users },
+  { to: '/admin/employees', label: 'People', icon: Users, badge: 'access' },
+  { to: '/admin/departments', label: 'Department creation', icon: Building2 },
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/admin/leave', label: 'Approvals', icon: CalendarDays, badge: 'pending' },
   { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
@@ -47,13 +51,27 @@ const ADMIN_NAV: NavItem[] = [
 
 export function AppShell() {
   const { session, isAdmin, signOut } = useAuth()
-  const { snapshot } = useRealtime()
+  const { snapshot, subscribe } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [pendingAccess, setPendingAccess] = useState(0)
   const location = useLocation()
   const navigate = useNavigate()
 
   const items = isAdmin ? ADMIN_NAV : EMPLOYEE_NAV
   const pending = snapshot.pending_leave_requests ?? 0
+
+  useEffect(() => {
+    if (!isAdmin) return
+    const load = () => {
+      api.get<Paginated<EmployeeSummary>>('/employees/pending-access')
+        .then((result) => setPendingAccess(result.total))
+        .catch(() => setPendingAccess(0))
+    }
+    load()
+    return subscribe((event) => {
+      if (event.event === 'employee.access_approved' || event.event === 'employee.access_rejected') load()
+    })
+  }, [isAdmin, subscribe])
 
   useEffect(() => setMenuOpen(false), [location.pathname])
 
@@ -71,7 +89,7 @@ export function AppShell() {
 
   const link = (item: NavItem, compact = false) => {
     const Icon = item.icon
-    const count = item.badge === 'pending' ? pending : 0
+    const count = item.badge === 'pending' ? pending : item.badge === 'access' ? pendingAccess : 0
     return (
       <NavLink
         key={item.to}
@@ -204,7 +222,7 @@ export function AppShell() {
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-150 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
           {items.slice(0, 5).map((item) => {
             const Icon = item.icon
-            const count = item.badge === 'pending' ? pending : 0
+            const count = item.badge === 'pending' ? pending : item.badge === 'access' ? pendingAccess : 0
             return (
               <NavLink
                 key={item.to}
