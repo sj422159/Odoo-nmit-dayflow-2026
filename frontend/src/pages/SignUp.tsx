@@ -2,11 +2,19 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, UserPlus, X } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { ApiError, api } from '@/api/client'
 import { PASSWORD_RULES, signUpSchema, type SignUpValues } from '@/lib/validation'
 import { AuthLayout } from '@/pages/AuthLayout'
 import { Button, Field, FormBanner, Input, Select } from '@/components/ui/Primitives'
+
+const REGISTERED_ORGANIZATIONS = [
+  'TeCryst Technologies',
+  'Acme Global Enterprises',
+  'Innovate HR Labs',
+  'Vertex Digital Solutions',
+  'Nexus Media & Logistics',
+]
 
 export default function SignUp() {
   const [banner, setBanner] = useState<string | null>(null)
@@ -21,20 +29,24 @@ export default function SignUp() {
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
     mode: 'onBlur',
-    defaultValues: { role: 'EMPLOYEE', department: '', designation: '' },
+    defaultValues: { role: 'EMPLOYEE', organization: 'TeCryst Technologies', department: '', designation: '' },
   })
 
   const password = watch('password') ?? ''
+  const selectedRole = watch('role') ?? 'EMPLOYEE'
 
   const onSubmit = async (values: SignUpValues) => {
     setBanner(null)
     try {
+      // Generate a valid employee code format for the backend (TC-XXXX)
+      const generatedCode = `TC-${Math.floor(1000 + Math.random() * 9000)}`
       const res = await api.public.post<{ message: string; verification_link: string | null }>(
         '/auth/signup',
         {
           ...values,
+          employee_code: generatedCode,
           department: values.department || 'Unassigned',
-          designation: values.designation || 'Associate',
+          designation: values.designation || (values.role === 'ADMIN' ? 'HR Administrator' : 'Associate'),
         },
       )
       setDone({ message: res.message, link: res.verification_link })
@@ -45,7 +57,7 @@ export default function SignUp() {
         })
         setBanner(Object.keys(error.fields).length ? null : error.message)
       } else {
-        setBanner('Something went wrong. Try again.')
+        setBanner('Something went wrong. Please check your details and try again.')
       }
     }
   }
@@ -83,7 +95,7 @@ export default function SignUp() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Takes a minute. Your HR officer can fill in the rest."
+      subtitle="Takes a minute to register your role on the platform."
       footer={
         <p className="text-sm text-away">
           Already registered?{' '}
@@ -93,52 +105,109 @@ export default function SignUp() {
         </p>
       }
     >
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <form noValidate autoComplete="off" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         <FormBanner message={banner} />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
-            <Input id="first_name" autoComplete="given-name" invalid={!!errors.first_name} {...register('first_name')} />
-          </Field>
-          <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} required>
-            <Input id="last_name" autoComplete="family-name" invalid={!!errors.last_name} {...register('last_name')} />
-          </Field>
-        </div>
-
-        <Field
-          label="Employee ID"
-          htmlFor="employee_code"
-          error={errors.employee_code?.message}
-          hint="The ID on your offer letter, e.g. DF-1042."
-          required
-        >
-          <Input id="employee_code" placeholder="DF-1042" invalid={!!errors.employee_code} {...register('employee_code')} />
-        </Field>
-
-        <Field label="Work email" htmlFor="email" error={errors.email?.message} required>
-          <Input id="email" type="email" autoComplete="email" placeholder="you@company.com" invalid={!!errors.email} {...register('email')} />
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Department" htmlFor="department" error={errors.department?.message} hint="Optional">
-            <Input id="department" placeholder="Engineering" {...register('department')} />
-          </Field>
-          <Field label="Job title" htmlFor="designation" error={errors.designation?.message} hint="Optional">
-            <Input id="designation" placeholder="Backend Engineer" {...register('designation')} />
-          </Field>
-        </div>
-
-        <Field label="Account type" htmlFor="role" error={errors.role?.message} required>
-          <Select id="role" invalid={!!errors.role} {...register('role')}>
+        {/* Account Role Selection */}
+        <Field label="Account role" htmlFor="role" error={errors.role?.message} required>
+          <Select id="role" invalid={!!errors.role} {...register('role')} className="cursor-pointer">
             <option value="EMPLOYEE">Employee</option>
-            <option value="ADMIN">HR officer / admin</option>
+            <option value="ADMIN">HR / Admin</option>
           </Select>
         </Field>
 
-        <Field label="Password" htmlFor="password" error={errors.password?.message} required>
-          <Input id="password" type="password" autoComplete="new-password" invalid={!!errors.password} {...register('password')} />
+        {/* Organization Logic: Dropdown for Employee vs Text Input for HR/Admin */}
+        {selectedRole === 'EMPLOYEE' ? (
+          <Field
+            label="Organization"
+            htmlFor="organization"
+            error={errors.organization?.message}
+            required
+          >
+            <Select
+              id="organization"
+              invalid={!!errors.organization}
+              {...register('organization')}
+              className="cursor-pointer"
+            >
+              <option value="">Choose your organization...</option>
+              {REGISTERED_ORGANIZATIONS.map((org) => (
+                <option key={org} value={org}>
+                  {org}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <Field
+            label="Organization name"
+            htmlFor="organization"
+            error={errors.organization?.message}
+            required
+          >
+            <Input
+              id="organization"
+              type="text"
+              autoComplete="off"
+              invalid={!!errors.organization}
+              {...register('organization')}
+            />
+          </Field>
+        )}
+
+        {/* Name Fields */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
+            <Input
+              id="first_name"
+              autoComplete="off"
+              invalid={!!errors.first_name}
+              {...register('first_name')}
+            />
+          </Field>
+          <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} required>
+            <Input
+              id="last_name"
+              autoComplete="off"
+              invalid={!!errors.last_name}
+              {...register('last_name')}
+            />
+          </Field>
+        </div>
+
+        {/* Work Email Field */}
+        <Field label="Work email" htmlFor="email" error={errors.email?.message} required>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="off"
+            invalid={!!errors.email}
+            {...register('email')}
+          />
         </Field>
 
+        {/* Optional Department and Job Title */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Department" htmlFor="department" error={errors.department?.message}>
+            <Input id="department" autoComplete="off" {...register('department')} />
+          </Field>
+          <Field label="Job title" htmlFor="designation" error={errors.designation?.message}>
+            <Input id="designation" autoComplete="off" {...register('designation')} />
+          </Field>
+        </div>
+
+        {/* Password Field */}
+        <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            invalid={!!errors.password}
+            {...register('password')}
+          />
+        </Field>
+
+        {/* Password Strength Checklist with Iconify */}
         <ul className="-mt-1 grid gap-1 sm:grid-cols-2">
           {PASSWORD_RULES.map((rule) => {
             const met = rule.test(password)
@@ -147,13 +216,17 @@ export default function SignUp() {
                 key={rule.label}
                 className={`flex items-center gap-1.5 text-xs ${met ? 'text-present' : 'text-away'}`}
               >
-                {met ? <Check className="h-3.5 w-3.5" aria-hidden /> : <X className="h-3.5 w-3.5" aria-hidden />}
+                <Icon
+                  icon={met ? 'mdi:check-circle' : 'mdi:close-circle'}
+                  className={`h-3.5 w-3.5 shrink-0 ${met ? 'text-present' : 'text-away/60'}`}
+                />
                 {rule.label}
               </li>
             )
           })}
         </ul>
 
+        {/* Confirm Password Field */}
         <Field label="Repeat password" htmlFor="confirm_password" error={errors.confirm_password?.message} required>
           <Input
             id="confirm_password"
@@ -164,8 +237,13 @@ export default function SignUp() {
           />
         </Field>
 
-        <Button type="submit" loading={isSubmitting} className="mt-1 w-full" icon={<UserPlus className="h-4 w-4" />}>
-          Create account
+        <Button
+          type="submit"
+          loading={isSubmitting}
+          className="mt-1 w-full flex items-center justify-center gap-2"
+        >
+          <span>Create account</span>
+          <Icon icon="mdi:account-plus-outline" className="h-4 w-4" />
         </Button>
       </form>
     </AuthLayout>

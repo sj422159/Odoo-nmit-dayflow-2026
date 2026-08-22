@@ -25,11 +25,7 @@ export const signInSchema = z.object({
 
 export const signUpSchema = z
   .object({
-    employee_code: z
-      .string()
-      .min(1, 'Enter your employee ID.')
-      .transform((v) => v.trim().toUpperCase())
-      .pipe(z.string().regex(/^[A-Z]{2,4}-?\d{3,6}$/, 'Employee IDs look like DF-1042.')),
+    organization: z.string().min(1, 'Please specify your organization.'),
     email: z.string().min(1, 'Enter your work email.').email('That does not look like an email address.'),
     first_name: z
       .string()
