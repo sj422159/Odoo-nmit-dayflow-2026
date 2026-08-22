@@ -12,11 +12,11 @@ import { Button, Field, FormBanner, Input, Select } from '@/components/ui/Primit
 type AccessType = 'INTERNAL' | 'EXTERNAL'
 type InternalRole = 'EMPLOYEE' | 'HR_ADMIN'
 
-export default function SignIn() {
+export default function SignIn({ corporate = false }: { corporate?: boolean }) {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [accessType, setAccessType] = useState<AccessType>('INTERNAL')
+  const [accessType, setAccessType] = useState<AccessType>(corporate ? 'EXTERNAL' : 'INTERNAL')
   const [internalRole, setInternalRole] = useState<InternalRole>('EMPLOYEE')
   const [banner, setBanner] = useState<string | null>(null)
 
