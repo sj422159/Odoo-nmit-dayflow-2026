@@ -149,7 +149,7 @@ export default function SignIn() {
         {/* ======================================================== */}
         {/* 2. INTERNAL ROLE SELECTOR: Clean Dropdown                */}
         {/* ======================================================== */}
-        {accessType === 'INTERNAL' ? (
+        {accessType === 'INTERNAL' && (
           <div>
             <label htmlFor="internal_role" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-600">
               Select Internal Role
@@ -166,19 +166,6 @@ export default function SignIn() {
               <option value="EMPLOYEE">Employee</option>
               <option value="HR_ADMIN">HR / Admin</option>
             </Select>
-          </div>
-        ) : (
-          /* External Corporate Admin Banner */
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3.5 flex items-start gap-3">
-            <div className="rounded-lg bg-indigo-600 p-2 text-white shrink-0">
-              <Icon icon="mdi:domain" className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-indigo-950">Corporate Administrator Portal</p>
-              <p className="text-[11px] leading-relaxed text-indigo-800/80 mt-0.5">
-                Single sign-on for Corporate Management, Multi-Tenant Audits, and Global Organization Settings.
-              </p>
-            </div>
           </div>
         )}
 
