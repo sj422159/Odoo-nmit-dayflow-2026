@@ -192,26 +192,12 @@ export default function SignIn() {
             label={accessType === 'EXTERNAL' ? 'Corporate email' : 'Work email'}
             htmlFor="email"
             error={errors.email?.message}
-            hint={
-              accessType === 'EXTERNAL'
-                ? 'Corporate / Admin email ID'
-                : internalRole === 'EMPLOYEE'
-                ? 'Registered employee email address'
-                : 'HR officer / Administrator email'
-            }
             required
           >
             <Input
               id="email"
               type="email"
               autoComplete="email"
-              placeholder={
-                accessType === 'EXTERNAL'
-                  ? 'corp.admin@tecryst.com'
-                  : internalRole === 'EMPLOYEE'
-                  ? 'employee@tecryst.com'
-                  : 'hr.admin@tecryst.com'
-              }
               invalid={!!errors.email}
               {...register('email')}
             />
@@ -222,7 +208,6 @@ export default function SignIn() {
               id="password"
               type="password"
               autoComplete="current-password"
-              placeholder="Enter your security password"
               invalid={!!errors.password}
               {...register('password')}
             />
