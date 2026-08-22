@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BellRing, CalendarDays, Clock, LogIn, LogOut, Wallet } from 'lucide-react'
 import { api, ApiError } from '@/api/client'
@@ -85,82 +85,79 @@ export default function EmployeeHome() {
     tone: 'present' | 'pending' | 'absent'
     icon: ReactNode
     action: ReactNode
-  }> = useMemo(
-    () => [
-      {
-        label: 'Today’s attendance',
-        value: today.checked_in ? fmtDuration(today.worked_minutes) : 'Not started',
-        unit: today.checked_in ? 'today' : 'check-in',
-        hint: today.check_in
-          ? `In at ${fmtTime(today.check_in)}${today.check_out ? ` · Out at ${fmtTime(today.check_out)}` : ' · still on shift'}`
-          : 'No check-in recorded yet',
-        tone: attendanceTone,
-        icon: <Clock className="h-4 w-4" />,
-        action: today.checked_in && !today.checked_out ? (
-          <Button variant="success" className="w-full" onClick={() => clock('check-out')} loading={clocking} icon={<LogOut className="h-4 w-4" />}>
-            Check out
+  }> = [
+    {
+      label: 'Today’s attendance',
+      value: today.checked_in ? fmtDuration(today.worked_minutes) : 'Not started',
+      unit: today.checked_in ? 'today' : 'check-in',
+      hint: today.check_in
+        ? `In at ${fmtTime(today.check_in)}${today.check_out ? ` · Out at ${fmtTime(today.check_out)}` : ' · still on shift'}`
+        : 'No check-in recorded yet',
+      tone: attendanceTone,
+      icon: <Clock className="h-4 w-4" />,
+      action: today.checked_in && !today.checked_out ? (
+        <Button variant="success" className="w-full" onClick={() => clock('check-out')} loading={clocking} icon={<LogOut className="h-4 w-4" />}>
+          Check out
+        </Button>
+      ) : (
+        <Link to="/attendance" className="block">
+          <Button variant="secondary" className="w-full">
+            View attendance
           </Button>
-        ) : (
-          <Link to="/attendance" className="block">
-            <Button variant="secondary" className="w-full">
-              View attendance
-            </Button>
-          </Link>
-        ),
-      },
-      {
-        label: 'Leave balance',
-        value: balance.paid_remaining,
-        unit: `/${balance.paid_total} days`,
-        hint:
-          balance.pending_days > 0
-            ? `${balance.pending_days} day(s) awaiting approval`
-            : balance.paid_remaining === 0
-              ? 'No paid leave left this year'
-              : 'Healthy balance this cycle',
-        tone: leaveTone,
-        icon: <CalendarDays className="h-4 w-4" />,
-        action: (
-          <Link to="/leave" className="block">
-            <Button variant="secondary" className="w-full">
-              Manage leave
-            </Button>
-          </Link>
-        ),
-      },
-      {
-        label: 'Payroll summary',
-        value: payroll.salary ? fmtMoney(payroll.salary.net_monthly, payroll.currency) : '—',
-        unit: payroll.salary ? 'net / month' : 'salary',
-        hint: payroll.salary ? `YTD ${fmtMoney(payroll.ytd_net, payroll.currency)}` : 'Salary structure pending',
-        tone: payroll.salary ? 'present' : 'pending',
-        icon: <CalendarDays className="h-4 w-4" />,
-        action: (
-          <Link to="/payroll" className="block">
-            <Button variant="secondary" className="w-full">
-              View payslips
-            </Button>
-          </Link>
-        ),
-      },
-      {
-        label: 'Alerts',
-        value: unreadAlerts,
-        unit: unreadAlerts === 1 ? 'new' : 'new',
-        hint: unreadAlerts > 0 ? 'Review unread notices and approvals' : 'No urgent items right now',
-        tone: (unreadAlerts > 0 ? 'absent' : 'present') as 'present' | 'absent',
-        icon: <BellRing className="h-4 w-4" />,
-        action: (
-          <Link to="/dashboard" className="block">
-            <Button variant="secondary" className="w-full">
-              Review alerts
-            </Button>
-          </Link>
-        ),
-      },
-    ],
-    [attendanceTone, balance.paid_remaining, balance.paid_total, balance.pending_days, clock, clocking, payroll, today.check_in, today.check_out, today.checked_in, today.worked_minutes, unreadAlerts],
-  )
+        </Link>
+      ),
+    },
+    {
+      label: 'Leave balance',
+      value: balance.paid_remaining,
+      unit: `/${balance.paid_total} days`,
+      hint:
+        balance.pending_days > 0
+          ? `${balance.pending_days} day(s) awaiting approval`
+          : balance.paid_remaining === 0
+            ? 'No paid leave left this year'
+            : 'Healthy balance this cycle',
+      tone: leaveTone,
+      icon: <CalendarDays className="h-4 w-4" />,
+      action: (
+        <Link to="/leave" className="block">
+          <Button variant="secondary" className="w-full">
+            Manage leave
+          </Button>
+        </Link>
+      ),
+    },
+    {
+      label: 'Payroll summary',
+      value: payroll.salary ? fmtMoney(payroll.salary.net_monthly, payroll.currency) : '—',
+      unit: payroll.salary ? 'net / month' : 'salary',
+      hint: payroll.salary ? `YTD ${fmtMoney(payroll.ytd_net, payroll.currency)}` : 'Salary structure pending',
+      tone: payroll.salary ? 'present' : 'pending',
+      icon: <Wallet className="h-4 w-4" />,
+      action: (
+        <Link to="/payroll" className="block">
+          <Button variant="secondary" className="w-full">
+            View payslips
+          </Button>
+        </Link>
+      ),
+    },
+    {
+      label: 'Alerts',
+      value: unreadAlerts,
+      unit: unreadAlerts === 1 ? 'new' : 'new',
+      hint: unreadAlerts > 0 ? 'Review unread notices and approvals' : 'No urgent items right now',
+      tone: (unreadAlerts > 0 ? 'absent' : 'present') as 'present' | 'absent',
+      icon: <BellRing className="h-4 w-4" />,
+      action: (
+        <Link to="/dashboard" className="block">
+          <Button variant="secondary" className="w-full">
+            Review alerts
+          </Button>
+        </Link>
+      ),
+    },
+  ]
 
   return (
     <>
