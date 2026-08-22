@@ -26,7 +26,9 @@ from app.models import (  # noqa: E402,F401
     department,
     employee,
     holiday,
+    company_setting,
     hr_officer,
+
     leave,
     notification,
     payroll,

@@ -25,17 +25,23 @@ def working_days_between(start: date, end: date) -> List[date]:
     return days
 
 
-def workday_start_time() -> time:
-    hour, minute = (int(part) for part in settings.WORKDAY_START.split(":"))
+from app.services.settings_service import get_setting
+
+
+def workday_start_time(db: Optional[Session] = None) -> time:
+    val = get_setting(db, "WORKDAY_START", settings.WORKDAY_START) if db else settings.WORKDAY_START
+    hour, minute = (int(part) for part in val.split(":"))
     return time(hour=hour, minute=minute)
 
 
-def derive_status(worked_minutes: int) -> AttendanceStatus:
+def derive_status(worked_minutes: int, db: Optional[Session] = None) -> AttendanceStatus:
+    half_day_limit = int(get_setting(db, "HALF_DAY_MINUTES", str(settings.HALF_DAY_MINUTES))) if db else settings.HALF_DAY_MINUTES
     if worked_minutes <= 0:
         return AttendanceStatus.ABSENT
-    if worked_minutes < settings.HALF_DAY_MINUTES:
+    if worked_minutes < half_day_limit:
         return AttendanceStatus.HALF_DAY
     return AttendanceStatus.PRESENT
+
 
 
 def get_record(db: Session, employee_id: int, work_date: date) -> Optional[AttendanceRecord]:

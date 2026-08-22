@@ -347,6 +347,26 @@ export interface Holiday {
   created_at: string
 }
 
+export interface AILeaveEvaluation {
+
+  recommendation: 'APPROVE' | 'REJECT' | 'NEEDS_MORE_INFO'
+  confidence: number
+  summary: string
+  reasoning: string[]
+  suggested_comment: string
+}
+
+export interface CompanySettings {
+
+  workday_start: string
+  workday_minutes: number
+  half_day_minutes: number
+  annual_paid_leave_days: number
+  annual_sick_leave_days: number
+}
+
+
+
 
 
 

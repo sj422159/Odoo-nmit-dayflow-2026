@@ -5,14 +5,16 @@ import {
   CalendarCheck,
   CalendarDays,
   Building2,
-  History,
   LayoutDashboard,
+
   LogOut,
   Menu,
   Users,
   UserRound,
   Wallet,
+  Settings,
   X,
+
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/context/RealtimeContext'
@@ -55,9 +57,10 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/holidays', label: 'Holidays', icon: CalendarDays },
   { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
   { to: '/chat', label: 'Messages', icon: MessageSquare },
-  { to: '/admin/history', label: 'History', icon: History },
   { to: '/admin/insights', label: 'Insights', icon: BarChart3 },
 ]
+
+
 
 
 
@@ -250,6 +253,17 @@ export function AppShell() {
             <HeaderChatButton />
             <HeaderHistoryPanel />
             <NotificationBell />
+
+            {isAdmin && (
+              <Link
+                to="/admin/settings"
+                title="Company Settings"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-all hover:bg-slate-50 hover:text-slate-900 shadow-2xs"
+              >
+                <Settings className="h-4 w-4" />
+              </Link>
+            )}
+
 
 
             <Link

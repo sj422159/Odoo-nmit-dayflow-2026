@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Icon } from '@iconify/react'
 import { ApiError, api } from '@/api/client'
-import type { LeaveList, LeaveRequest, LeaveStatus, LeaveType } from '@/api/types'
+import type { AILeaveEvaluation, LeaveList, LeaveRequest, LeaveStatus, LeaveType } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
@@ -16,6 +16,7 @@ import {
   Skeleton,
   Textarea,
 } from '@/components/ui/Primitives'
+
 import { DataTable } from '@/components/ui/DataTable'
 import { fmtDate, LEAVE_STATUS_TONE, LEAVE_TYPE_LABEL, titleCase } from '@/lib/format'
 
@@ -34,6 +35,25 @@ export default function LeaveApprovals() {
     decision: 'APPROVED' | 'REJECTED'
   } | null>(null)
   const [reviewComment, setReviewComment] = useState('')
+
+  // AI evaluation modal state
+  const [aiModal, setAiModal] = useState<{
+    request: LeaveRequest
+    evaluation?: AILeaveEvaluation
+    loading: boolean
+  } | null>(null)
+
+  const handleAiEvaluate = async (req: LeaveRequest) => {
+    setAiModal({ request: req, loading: true })
+    try {
+      const evalRes = await api.post<AILeaveEvaluation>(`/leave/requests/${req.id}/ai-evaluate`)
+      setAiModal({ request: req, evaluation: evalRes, loading: false })
+    } catch {
+      setBanner('Failed to evaluate leave request with AI assistant.')
+      setAiModal(null)
+    }
+  }
+
 
   const load = useCallback(
     () => api.get<LeaveList>('/leave/requests', { page_size: 100 }),
@@ -261,6 +281,16 @@ export default function LeaveApprovals() {
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={() => handleAiEvaluate(leave)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-flow-700 bg-flow-50 hover:bg-flow-100 border-flow-200"
+                title="Ask Mistral AI Assistant"
+              >
+                <Icon icon="mdi:robot-sparkles" className="h-3.5 w-3.5 text-flow-600" />
+                <span>AI Review</span>
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 loading={busyId === leave.id}
                 onClick={() => {
                   setReviewModal({ request: leave, decision: 'APPROVED' })
@@ -286,6 +316,7 @@ export default function LeaveApprovals() {
               </Button>
             </div>
           )
+
         },
         enableSorting: false,
       },
@@ -437,27 +468,91 @@ export default function LeaveApprovals() {
         </div>
       )}
 
-      {/* Controls Bar: Filters on Left, Search on Right */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        {/* Left Side: Status & Type Filters */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LeaveStatus | 'ALL')}
-            className="w-full text-xs font-medium sm:w-36"
+      {/* 3 Explicit Status Tabs: Pending, Approved, Rejected */}
+      <div className="border border-slate-200 bg-white rounded-2xl p-1.5 shadow-xs flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setStatusFilter('PENDING')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            statusFilter === 'PENDING'
+              ? 'bg-amber-500 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Icon icon="mdi:clock-alert-outline" className="h-4 w-4" />
+          <span>Pending Approvals</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              statusFilter === 'PENDING' ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-800'
+            }`}
           >
-            <option value="ALL">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-          </Select>
+            {pendingCount}
+          </span>
+        </button>
 
+        <button
+          type="button"
+          onClick={() => setStatusFilter('APPROVED')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            statusFilter === 'APPROVED'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Icon icon="mdi:check-decagram-outline" className="h-4 w-4" />
+          <span>Approved</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              statusFilter === 'APPROVED' ? 'bg-white/30 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}
+          >
+            {approvedCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusFilter('REJECTED')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            statusFilter === 'REJECTED'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Icon icon="mdi:close-octagon-outline" className="h-4 w-4" />
+          <span>Rejected</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              statusFilter === 'REJECTED' ? 'bg-white/30 text-white' : 'bg-rose-100 text-rose-800'
+            }`}
+          >
+            {rejectedCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusFilter('ALL')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer sm:ml-auto ${
+            statusFilter === 'ALL'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          <span>All Submissions ({totalCount})</span>
+        </button>
+      </div>
+
+      {/* Controls Bar: Type Filter on Left, Search on Right */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        {/* Left Side: Type Filter */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <Select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as LeaveType | 'ALL')}
-            className="w-full text-xs font-medium sm:w-36"
+            className="w-full text-xs font-medium sm:w-40"
           >
-            <option value="ALL">All Types</option>
+            <option value="ALL">All Leave Types</option>
             <option value="PAID">Paid Leave</option>
             <option value="SICK">Sick Leave</option>
             <option value="UNPAID">Unpaid Leave</option>
@@ -478,6 +573,7 @@ export default function LeaveApprovals() {
           />
         </div>
       </div>
+
 
       {/* Loading Skeleton */}
       {loading && !data && (
@@ -595,9 +691,117 @@ export default function LeaveApprovals() {
           </div>
         </div>
       )}
+
+      {/* Mistral AI Assistant Recommendation Modal */}
+
+      {aiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-150">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-flow-100 text-flow-700">
+                  <Icon icon="mdi:robot-sparkles" className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                    Mistral AI Decision Assistant
+                  </h3>
+                  <p className="text-xs text-away">{aiModal.request.employee_name} · {aiModal.request.days} day(s) {LEAVE_TYPE_LABEL[aiModal.request.leave_type]}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAiModal(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <Icon icon="mdi:close" className="h-5 w-5" />
+              </button>
+            </div>
+
+            {aiModal.loading ? (
+              <div className="py-8 text-center space-y-3">
+                <Icon icon="mdi:loading" className="h-8 w-8 text-flow-600 animate-spin mx-auto" />
+                <p className="text-xs font-bold text-ink">Evaluating leave reason, policy rules & balances with Mistral AI...</p>
+              </div>
+            ) : aiModal.evaluation ? (
+              <div className="space-y-4 text-xs">
+                {/* AI Recommendation Banner */}
+                <div
+                  className={`p-4 rounded-xl border flex items-center justify-between ${
+                    aiModal.evaluation.recommendation === 'APPROVE'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : aiModal.evaluation.recommendation === 'REJECT'
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  <div>
+                    <p className="text-[10px] uppercase font-bold tracking-wider opacity-75">AI Recommendation</p>
+                    <h4 className="text-base font-extrabold flex items-center gap-1.5 mt-0.5">
+                      {aiModal.evaluation.recommendation === 'APPROVE' && <Icon icon="mdi:check-circle" className="h-5 w-5 text-emerald-600" />}
+                      {aiModal.evaluation.recommendation === 'REJECT' && <Icon icon="mdi:close-circle" className="h-5 w-5 text-rose-600" />}
+                      {aiModal.evaluation.recommendation === 'NEEDS_MORE_INFO' && <Icon icon="mdi:help-circle" className="h-5 w-5 text-amber-600" />}
+                      {aiModal.evaluation.recommendation === 'APPROVE'
+                        ? 'RECOMMEND APPROVAL'
+                        : aiModal.evaluation.recommendation === 'REJECT'
+                        ? 'RECOMMEND REJECTION'
+                        : 'NEEDS MORE INFORMATION'}
+                    </h4>
+                  </div>
+                  <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-extrabold shadow-xs">
+                    {aiModal.evaluation.confidence}% Confidence
+                  </span>
+                </div>
+
+                {/* Summary Box */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-150">
+                  <p className="font-semibold text-slate-800">{aiModal.evaluation.summary}</p>
+                </div>
+
+                {/* Key Rationale List */}
+                <div className="space-y-1.5">
+                  <p className="font-bold text-slate-700 uppercase text-[10px] tracking-wider">Key Analysis Points</p>
+                  <ul className="space-y-1">
+                    {aiModal.evaluation.reasoning.map((point, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-slate-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-flow-600 mt-1.5 shrink-0" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* One-Click Apply Button */}
+                <div className="pt-3 border-t border-slate-150 flex items-center justify-between gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => setAiModal(null)}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    variant={aiModal.evaluation.recommendation === 'REJECT' ? 'danger' : 'success'}
+                    size="sm"
+                    className="font-bold text-xs flex items-center gap-1.5"
+                    onClick={() => {
+                      const dec = aiModal.evaluation?.recommendation === 'REJECT' ? 'REJECTED' : 'APPROVED'
+                      const comment = aiModal.evaluation?.suggested_comment || ''
+                      const req = aiModal.request
+                      setAiModal(null)
+                      setReviewModal({ request: req, decision: dec })
+                      setReviewComment(comment)
+                    }}
+                  >
+                    <Icon icon="mdi:magic-staff" className="h-4 w-4" />
+                    <span>Apply AI Recommendation ({aiModal.evaluation.recommendation === 'REJECT' ? 'Reject' : 'Approve'})</span>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 function LeaveDataTable({
   columns,

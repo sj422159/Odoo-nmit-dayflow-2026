@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     HALF_DAY_MINUTES: int = 240         # below this (but > 0) counts as half-day
     ANNUAL_PAID_LEAVE_DAYS: int = 18
     ANNUAL_SICK_LEAVE_DAYS: int = 10
+    MISTRAL_API_KEY: str = ""
+
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

@@ -231,3 +231,19 @@ def decide_request(
     result = _out(request, employee)
     bus.publish(f"leave.{verb}", result.model_dump(), to_admins=True, to_user_ids=[employee.id] if employee else [])
     return result
+
+
+from app.services.ai_leave_service import evaluate_leave_request_ai
+
+
+@router.post("/requests/{request_id}/ai-evaluate")
+def ai_evaluate_leave(
+    request_id: int,
+    db: Session = Depends(get_db),
+    admin: HROfficer = Depends(get_current_admin),
+):
+    try:
+        return evaluate_leave_request_ai(db, request_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+

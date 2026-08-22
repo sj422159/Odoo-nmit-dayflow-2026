@@ -15,6 +15,8 @@ def count_leave_days(start: date, end: date) -> int:
     return len(working_days_between(start, end))
 
 
+from app.services.settings_service import get_setting
+
 def get_or_create_balance(db: Session, employee_id: int, year: Optional[int] = None) -> LeaveBalance:
     year = year or date.today().year
     balance = db.scalar(
@@ -23,15 +25,18 @@ def get_or_create_balance(db: Session, employee_id: int, year: Optional[int] = N
         )
     )
     if balance is None:
+        paid_days = int(get_setting(db, "ANNUAL_PAID_LEAVE_DAYS", str(settings.ANNUAL_PAID_LEAVE_DAYS)))
+        sick_days = int(get_setting(db, "ANNUAL_SICK_LEAVE_DAYS", str(settings.ANNUAL_SICK_LEAVE_DAYS)))
         balance = LeaveBalance(
             employee_id=employee_id,
             year=year,
-            paid_total=settings.ANNUAL_PAID_LEAVE_DAYS,
-            sick_total=settings.ANNUAL_SICK_LEAVE_DAYS,
+            paid_total=paid_days,
+            sick_total=sick_days,
         )
         db.add(balance)
         db.flush()
     return balance
+
 
 
 def overlapping_requests(db: Session, employee_id: int, start: date, end: date) -> List[LeaveRequest]:

@@ -29,6 +29,8 @@ const AdminLeave = lazy(() => import('@/pages/admin/LeaveApprovals'))
 const AdminPayroll = lazy(() => import('@/pages/admin/PayrollAdmin'))
 const AdminActivityHistory = lazy(() => import('@/pages/admin/ActivityHistory'))
 const AdminInsights = lazy(() => import('@/pages/admin/Insights'))
+const AdminSettings = lazy(() => import('@/pages/admin/CompanySettings'))
+
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function PageFallback() {
@@ -78,6 +80,7 @@ export default function App() {
               <Route path="/admin/payroll" element={<RequireAdmin><AdminPayroll /></RequireAdmin>} />
               <Route path="/admin/history" element={<RequireAdmin><AdminActivityHistory /></RequireAdmin>} />
               <Route path="/admin/insights" element={<RequireAdmin><AdminInsights /></RequireAdmin>} />
+              <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
 
               <Route path="*" element={<NotFound />} />
             </Route>
