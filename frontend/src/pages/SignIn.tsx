@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowRight, Building2, Shield, User, Users, KeyRound } from 'lucide-react'
+import { ArrowRight, Building2, KeyRound } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/context/AuthContext'
 import { signInSchema, type SignInValues } from '@/lib/validation'
 import { AuthLayout } from '@/pages/AuthLayout'
-import { Button, Field, FormBanner, Input } from '@/components/ui/Primitives'
+import { Button, Field, FormBanner, Input, Select } from '@/components/ui/Primitives'
 
 type AccessType = 'INTERNAL' | 'EXTERNAL'
 type InternalRole = 'EMPLOYEE' | 'HR_ADMIN'
@@ -124,7 +124,6 @@ export default function SignIn() {
                   : 'text-ink-600 hover:text-ink hover:bg-slate-200/50'
               }`}
             >
-              <Users className="h-3.5 w-3.5" />
               Internal Access
             </button>
 
@@ -140,77 +139,36 @@ export default function SignIn() {
                   : 'text-ink-600 hover:text-ink hover:bg-slate-200/50'
               }`}
             >
-              <Building2 className="h-3.5 w-3.5" />
               External Access
             </button>
           </div>
         </div>
 
         {/* ======================================================== */}
-        {/* 2. INTERNAL ROLE SELECTOR: Employee vs HR Admin          */}
+        {/* 2. INTERNAL ROLE SELECTOR: Dropdown                      */}
         {/* ======================================================== */}
         {accessType === 'INTERNAL' ? (
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-600">
+            <label htmlFor="internal_role" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-ink-600">
               Select Internal Role
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {/* Employee Option */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInternalRole('EMPLOYEE')
-                  setBanner(null)
-                }}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                  internalRole === 'EMPLOYEE'
-                    ? 'border-flow-500 bg-flow-50/60 ring-1 ring-flow-500 text-ink'
-                    : 'border-slate-200 bg-white hover:border-slate-300 text-ink-600'
-                }`}
-              >
-                <div className="flex items-center gap-2 font-bold text-xs">
-                  <div
-                    className={`p-1 rounded-lg ${
-                      internalRole === 'EMPLOYEE' ? 'bg-flow-500 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <User className="h-3.5 w-3.5" />
-                  </div>
-                  Employee
-                </div>
-                <span className="mt-1 text-[11px] text-ink-400 leading-tight">
-                  Self-service portal
-                </span>
-              </button>
-
-              {/* HR / Admin Option */}
-              <button
-                type="button"
-                onClick={() => {
-                  setInternalRole('HR_ADMIN')
-                  setBanner(null)
-                }}
-                className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                  internalRole === 'HR_ADMIN'
-                    ? 'border-flow-500 bg-flow-50/60 ring-1 ring-flow-500 text-ink'
-                    : 'border-slate-200 bg-white hover:border-slate-300 text-ink-600'
-                }`}
-              >
-                <div className="flex items-center gap-2 font-bold text-xs">
-                  <div
-                    className={`p-1 rounded-lg ${
-                      internalRole === 'HR_ADMIN' ? 'bg-flow-500 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <Shield className="h-3.5 w-3.5" />
-                  </div>
-                  HR / Admin
-                </div>
-                <span className="mt-1 text-[11px] text-ink-400 leading-tight">
-                  Approvals &amp; Payroll
-                </span>
-              </button>
-            </div>
+            <Select
+              id="internal_role"
+              value={internalRole}
+              onChange={(e) => {
+                setInternalRole(e.target.value as InternalRole)
+                setBanner(null)
+              }}
+              className="w-full bg-white font-medium text-ink cursor-pointer"
+            >
+              <option value="EMPLOYEE">👤 Employee (Self-Service Attendance &amp; Leaves)</option>
+              <option value="HR_ADMIN">🛡️ HR Officer / Admin (Approvals &amp; Payroll)</option>
+            </Select>
+            <p className="mt-1.5 text-xs text-ink-400">
+              {internalRole === 'EMPLOYEE'
+                ? 'Sign in to access personal attendance, leaves, and payslips.'
+                : 'Sign in to review workforce logs, approvals, and payroll.'}
+            </p>
           </div>
         ) : (
           /* External Corporate Admin Banner */
