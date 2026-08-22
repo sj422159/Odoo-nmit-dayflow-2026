@@ -42,6 +42,9 @@ export function RequireCorporate({ children }: { children: ReactNode }) {
 export function RedirectIfSignedIn({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth()
   if (loading) return <Splash />
-  if (session) return <Navigate to="/dashboard" replace />
+  if (session) {
+    const destination = session.user.role === 'CORPORATE' ? '/corporate/dashboard' : '/dashboard'
+    return <Navigate to={destination} replace />
+  }
   return <>{children}</>
 }

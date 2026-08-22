@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
 
     # --- CORS ------------------------------------------------------------
-    CORS_ORIGINS: List[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
+    CORS_ORIGINS: List[str] | str = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
 
     # --- Mail (local-first: messages are written to disk, no cloud SMTP) --
     MAIL_OUTBOX_DIR: str = "var/mail"
@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     @classmethod
     def _split_origins(cls, v):
         if isinstance(v, str):
+            if v.startswith("["):
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 

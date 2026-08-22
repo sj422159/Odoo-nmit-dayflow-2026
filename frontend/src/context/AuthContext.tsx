@@ -14,7 +14,8 @@ interface AuthValue {
   session: Session | null
   loading: boolean
   isAdmin: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  isCorporate: boolean
+  signIn: (email: string, password: string) => Promise<Session>
   signOut: () => void
   refreshSession: () => Promise<void>
 }
@@ -52,7 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       const pair = await api.public.post<TokenPair>('/auth/login', { email, password })
       tokens.save(pair)
-      setSession(await api.get<Session>('/auth/me'))
+      const nextSession = await api.get<Session>('/auth/me')
+      setSession(nextSession)
+      return nextSession
     },
     [],
   )
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       loading,
       isAdmin: session?.user.role === 'HR_ADMIN' || session?.user.role === 'ADMIN',
+      isCorporate: session?.user.role === 'CORPORATE',
       signIn,
       signOut,
       refreshSession: loadSession,
