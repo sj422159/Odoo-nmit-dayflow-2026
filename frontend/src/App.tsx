@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import { RealtimeProvider } from '@/context/RealtimeContext'
 import { AppShell } from '@/components/AppShell'
@@ -18,6 +18,8 @@ const Leave = lazy(() => import('@/pages/Leave'))
 const Payroll = lazy(() => import('@/pages/Payroll'))
 const Chat = lazy(() => import('@/pages/Chat'))
 const Holidays = lazy(() => import('@/pages/Holidays'))
+const Analysis = lazy(() => import('@/pages/Analysis'))
+const Reports = lazy(() => import('@/pages/Reports'))
 
 const AdminEmployees = lazy(() => import('@/pages/admin/Employees'))
 
@@ -69,6 +71,12 @@ export default function App() {
               <Route path="/payroll" element={<Payroll />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/holidays" element={<Holidays />} />
+              <Route path="/analysis" element={<Navigate to="/analysis/attendance" replace />} />
+              <Route path="/analysis/attendance" element={<Analysis />} />
+              <Route path="/analysis/payslip" element={<Analysis />} />
+              <Route path="/reports" element={<Navigate to="/reports/attendance" replace />} />
+              <Route path="/reports/attendance" element={<Reports />} />
+              <Route path="/reports/payslip" element={<Reports />} />
 
 
               <Route path="/admin/employees" element={<RequireAdmin><AdminEmployees /></RequireAdmin>} />

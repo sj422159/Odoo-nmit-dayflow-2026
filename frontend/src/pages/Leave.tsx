@@ -1,68 +1,51 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { type ColumnDef } from '@tanstack/react-table'
+import { Icon } from '@iconify/react'
 import Swal from 'sweetalert2'
 import {
-
   ArrowLeft,
-  ArrowUpDown,
   CalendarPlus,
   Clock,
   FileText,
-  Filter,
   Paperclip,
   Plus,
   Search,
   Trash2,
 } from 'lucide-react'
 import { ApiError, api } from '@/api/client'
-import type { LeaveBalance, LeaveList } from '@/api/types'
+import type { LeaveBalance, LeaveList, LeaveRequest } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { queuePendingAction } from '@/lib/offlineQueue'
 import { PageHeader } from '@/components/PageHeader'
-
-import { StatCard } from '@/components/StatCard'
 import {
   Button,
   Card,
-  CardHeader,
-  EmptyState,
   ErrorState,
   Field,
   FormBanner,
   Input,
-  Pill,
   Select,
   Skeleton,
   Textarea,
 } from '@/components/ui/Primitives'
+import { DataTable } from '@/components/ui/DataTable'
 import { leaveSchema, type LeaveValues } from '@/lib/validation'
 import { fmtDate, isoDate, LEAVE_STATUS_TONE, LEAVE_TYPE_LABEL, titleCase } from '@/lib/format'
 
-type ViewMode = 'list' | 'add'
-type SortField = 'start_date' | 'days' | 'leave_type' | 'status'
-type SortOrder = 'asc' | 'desc'
-
 export default function Leave() {
-  const [view, setView] = useState<ViewMode>('list')
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
-
-  // Datatable state
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
-  const [sortField, setSortField] = useState<SortField>('start_date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [page, setPage] = useState(1)
-  const pageSize = 10
-
-  // Proof file state
+  const [withdrawingId, setWithdrawingId] = useState<number | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
 
   const load = useCallback(async () => {
-
     try {
       const res = await Promise.all([
         api.get<LeaveBalance>('/leave/balance/me'),
@@ -81,6 +64,8 @@ export default function Leave() {
   const { data, loading, error, reload } = useAsync(load, [])
   useLiveRefresh(['leave.approved', 'leave.rejected'], reload)
 
+  const balance = data?.[0]
+  const requests = data?.[1]
 
   const {
     register,
@@ -93,8 +78,14 @@ export default function Leave() {
   } = useForm<LeaveValues>({
     resolver: zodResolver(leaveSchema),
     mode: 'onChange',
-    defaultValues: { leave_type: 'PAID', start_date: isoDate(new Date()), end_date: isoDate(new Date()), remarks: '' },
+    defaultValues: {
+      leave_type: 'PAID',
+      start_date: isoDate(new Date()),
+      end_date: isoDate(new Date()),
+      remarks: '',
+    },
   })
+
 
   const saveDraft = () => {
     const values = getValues()
@@ -157,10 +148,14 @@ export default function Leave() {
         remarks: values.remarks?.trim() || null,
       })
       setOk('Leave request submitted successfully. Your HR officer will review it.')
-      reset({ leave_type: values.leave_type, start_date: values.start_date, end_date: values.end_date, remarks: '' })
-      setProofFile(null)
+      reset({
+        leave_type: values.leave_type,
+        start_date: values.start_date,
+        end_date: values.end_date,
+        remarks: '',
+      })
+      setIsModalOpen(false)
       await reload()
-      setView('list')
     } catch (err) {
 
       if (err instanceof ApiError) {
@@ -176,393 +171,464 @@ export default function Leave() {
 
   const withdraw = async (id: number) => {
     setBanner(null)
+    setWithdrawingId(id)
     try {
       await api.delete(`/leave/requests/${id}`)
+      setOk('Leave request withdrawn.')
       await reload()
     } catch (err) {
       setBanner(err instanceof ApiError ? err.message : 'Could not withdraw that request.')
+    } finally {
+      setWithdrawingId(null)
     }
   }
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortField(field)
-      setSortOrder('asc')
-    }
-  }
-
-  if (loading && !data) {
-    return (
-      <div className="grid gap-4">
-        <Skeleton className="h-12 w-56" />
-        <Skeleton className="h-28" />
-        <Skeleton className="h-96" />
-      </div>
-    )
-  }
-  if (error || !data) return <ErrorState message={error ?? 'No data came back.'} onRetry={reload} />
-
-  const [balance, requests] = data
-  const rawItems = requests.items
-
-  // Filter items
-  const filteredItems = rawItems.filter((req) => {
-    if (statusFilter !== 'ALL' && req.status !== statusFilter) return false
-    if (typeFilter !== 'ALL' && req.leave_type !== typeFilter) return false
-    if (search.trim()) {
+  // Filtered requests
+  const filteredRequests = useMemo(() => {
+    return (requests?.items ?? []).filter((req) => {
+      if (statusFilter !== 'ALL' && req.status !== statusFilter) return false
+      if (typeFilter !== 'ALL' && req.leave_type !== typeFilter) return false
+      if (!search.trim()) return true
       const q = search.toLowerCase()
-      const matchType = LEAVE_TYPE_LABEL[req.leave_type]?.toLowerCase().includes(q)
-      const matchRemarks = req.remarks?.toLowerCase().includes(q)
-      const matchReviewer = req.reviewer_name?.toLowerCase().includes(q)
-      const matchStatus = req.status.toLowerCase().includes(q)
-      const matchDates = `${req.start_date} ${req.end_date}`.includes(q)
-      return matchType || matchRemarks || matchReviewer || matchStatus || matchDates
-    }
-    return true
-  })
+      const remarks = req.remarks || ''
+      const type = req.leave_type || ''
+      return remarks.toLowerCase().includes(q) || type.toLowerCase().includes(q)
+    })
+  }, [requests?.items, statusFilter, typeFilter, search])
 
-  // Sort items
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    let cmp = 0
-    if (sortField === 'start_date') {
-      cmp = new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-    } else if (sortField === 'days') {
-      cmp = a.days - b.days
-    } else if (sortField === 'leave_type') {
-      cmp = a.leave_type.localeCompare(b.leave_type)
-    } else if (sortField === 'status') {
-      cmp = a.status.localeCompare(b.status)
-    }
-    return sortOrder === 'asc' ? cmp : -cmp
-  })
+  // Counts for Bento Cards
+  const pendingCount = requests?.items.filter((r) => r.status === 'PENDING').length ?? 0
+  const approvedCount = requests?.items.filter((r) => r.status === 'APPROVED').length ?? 0
+  const totalDaysTaken =
+    requests?.items
+      .filter((r) => r.status === 'APPROVED')
+      .reduce((sum, r) => sum + Number(r.days || 0), 0) ?? 0
 
-  // Paginate items
-  const totalPages = Math.max(1, Math.ceil(sortedItems.length / pageSize))
-  const paginatedItems = sortedItems.slice((page - 1) * pageSize, page * pageSize)
+  // TanStack DataTable Columns
+  const columns = useMemo<ColumnDef<LeaveRequest>[]>(
+    () => [
+      {
+        accessorKey: 'leave_type',
+        header: 'Leave Type',
+        cell: ({ row }) => {
+          const type = row.original.leave_type
+          let bgTone = 'bg-slate-100 text-slate-700 border-slate-200'
+          if (type === 'PAID') bgTone = 'bg-blue-50 text-blue-700 border-blue-200/80'
+          if (type === 'SICK') bgTone = 'bg-amber-50 text-amber-700 border-amber-200/80'
+          if (type === 'UNPAID') bgTone = 'bg-purple-50 text-purple-700 border-purple-200/80'
+
+          return (
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${bgTone}`}>
+              {LEAVE_TYPE_LABEL[type] || type}
+            </span>
+          )
+        },
+      },
+      {
+        id: 'dates',
+        header: 'Dates & Duration',
+        accessorFn: (row) => row.start_date,
+        cell: ({ row }) => {
+          const { start_date, end_date, days } = row.original
+          return (
+            <div>
+              <p className="text-xs font-semibold text-ink tabular">
+                {fmtDate(start_date, 'd MMM')} – {fmtDate(end_date, 'd MMM yyyy')}
+              </p>
+              <p className="text-[11px] font-bold text-flow-600">
+                {days} working day{days === 1 ? '' : 's'}
+              </p>
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'remarks',
+        header: 'Reason / Remarks',
+        cell: ({ row }) => {
+          const req = row.original
+          return (
+            <div className="max-w-[240px]">
+              <p className="text-xs text-slate-700 truncate" title={req.remarks || undefined}>
+                {req.remarks ? `"${req.remarks}"` : '—'}
+              </p>
+              {req.review_comment && (
+                <p className="text-[11px] text-away truncate mt-0.5" title={req.review_comment}>
+                  <strong className="text-slate-600">{req.reviewer_name ?? 'HR'}:</strong> {req.review_comment}
+                </p>
+              )}
+            </div>
+          )
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+          const st = row.original.status
+          if (st === 'PENDING') {
+            return (
+              <span className="inline-flex items-center justify-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200/80 shadow-xs">
+                Pending Review
+              </span>
+            )
+          }
+          if (st === 'APPROVED') {
+            return (
+              <span className="inline-flex items-center justify-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200/80 shadow-xs">
+                Approved
+              </span>
+            )
+          }
+          if (st === 'REJECTED') {
+            return (
+              <span className="inline-flex items-center justify-center rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200/80 shadow-xs">
+                Rejected
+              </span>
+            )
+          }
+          return (
+            <span className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-bold border shadow-xs ${LEAVE_STATUS_TONE[st]}`}>
+              {titleCase(st)}
+            </span>
+          )
+        },
+      },
+      {
+        accessorKey: 'created_at',
+        header: 'Submitted On',
+        cell: ({ row }) => (
+          <span className="text-xs text-away tabular">
+            {fmtDate(row.original.created_at, 'd MMM yyyy')}
+          </span>
+        ),
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => {
+          const req = row.original
+          if (req.status !== 'PENDING') {
+            return <span className="text-xs text-away text-right block">Archived</span>
+          }
+          return (
+            <div className="text-right">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={withdrawingId === req.id}
+                onClick={() => withdraw(req.id)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 hover:border-rose-300"
+              >
+                <Icon icon="mdi:trash-can-outline" className="h-3.5 w-3.5" />
+                <span>Withdraw</span>
+              </Button>
+            </div>
+          )
+        },
+        enableSorting: false,
+      },
+    ],
+    [withdrawingId],
+  )
 
   return (
-    <>
-      <PageHeader
-        title={view === 'list' ? 'Time Off Management' : 'Request Time Off'}
-        description={
-          view === 'list'
-            ? 'Track leave balances, inspect past requests, and file new applications.'
-            : 'Fill in your leave duration, type, reason, and optional supporting document.'
-        }
-        actions={
-          view === 'list' ? (
-            <Button
-              onClick={() => {
-                setBanner(null)
-                setOk(null)
-                setView('add')
-              }}
-              icon={<Plus className="h-4 w-4" />}
-            >
-              Add Leave Request
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={() => setView('list')}
-              icon={<ArrowLeft className="h-4 w-4" />}
-            >
-              Back to My Leaves
-            </Button>
-          )
-        }
-      />
+    <div className="space-y-6">
+      {/* Header & Request Leave Button */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeader title="Time Off" />
+        <Button
+          onClick={() => {
+            setBanner(null)
+            setIsModalOpen(true)
+          }}
+          className="flex items-center gap-1.5 text-xs font-bold self-start sm:self-auto shadow-xs"
+        >
+          <Icon icon="mdi:calendar-plus" className="h-4 w-4" />
+          <span>Request Leave</span>
+        </Button>
+      </div>
 
-      {/* Top Stat Cards (Visible in List View) */}
-      {view === 'list' && (
-        <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Paid leave left" value={balance.paid_remaining} unit={`/ ${balance.paid_total}`} tone="flow" />
-          <StatCard label="Sick leave left" value={balance.sick_remaining} unit={`/ ${balance.sick_total}`} tone="flow" />
-          <StatCard label="Unpaid taken" value={balance.unpaid_used} unit="d" />
-          <StatCard
-            label="Awaiting approval"
-            value={balance.pending_days}
-            unit="d"
-            tone={balance.pending_days ? 'pending' : 'default'}
-          />
-        </div>
-      )}
-
-      {ok && (
-        <p role="status" className="mb-5 rounded-xl bg-present-soft px-4 py-3 text-sm font-semibold text-present">
-          {ok}
-        </p>
-      )}
-
-      {/* PAGE 1: DATATABLE VIEW */}
-      {view === 'list' && (
-        <Card className="flex flex-col">
-          <CardHeader
-            title="Leave History & Status"
-            subtitle={`${sortedItems.length} request${sortedItems.length === 1 ? '' : 's'} found`}
-          />
-
-          {/* Datatable Toolbar: Search & Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-150 p-4 bg-slate-50/50">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-away" />
-              <input
-                type="text"
-                placeholder="Search leaves by type, status, date or reason..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-ink outline-none transition focus:border-flow-500 focus:ring-2 focus:ring-flow-500/20"
-              />
+      {/* Compact Bento Balance Cards */}
+      {balance && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          {/* Paid Leave Balance Card */}
+          <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-flow-700">
+                Paid Leave Balance
+              </span>
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-flow-50 text-flow-700">
+                <Icon icon="mdi:beach" className="h-4 w-4" />
+              </span>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 text-xs font-semibold text-away">
-                <Filter className="h-3.5 w-3.5" />
-                Status:
-              </div>
-              <div className="flex gap-1 rounded-lg bg-slate-200/60 p-1 text-xs font-semibold">
-                {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => {
-                      setStatusFilter(st)
-                      setPage(1)
-                    }}
-                    className={`rounded-md px-2.5 py-1 transition ${
-                      statusFilter === st ? 'bg-white shadow-sm text-flow-600 font-bold' : 'text-ink-600 hover:text-ink'
-                    }`}
-                  >
-                    {st === 'ALL' ? 'All' : titleCase(st)}
-                  </button>
-                ))}
-              </div>
-
-              <Select
-                value={typeFilter}
-                onChange={(e) => {
-                  setTypeFilter(e.target.value)
-                  setPage(1)
-                }}
-                className="py-1.5 text-xs font-semibold"
-              >
-                <option value="ALL">All Types</option>
-                <option value="PAID">Paid Leave</option>
-                <option value="SICK">Sick Leave</option>
-                <option value="UNPAID">Unpaid Leave</option>
-              </Select>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold tracking-tight text-flow-700">
+                {balance.paid_remaining} <span className="text-xs font-normal text-away">/ {balance.paid_total}d</span>
+              </span>
+              <span className="text-[11px] font-semibold text-emerald-600">
+                {balance.paid_used}d used
+              </span>
             </div>
           </div>
 
-          {/* Datatable Body */}
-          {paginatedItems.length === 0 ? (
-            <EmptyState
-              title="No leave requests found"
-              description={search || statusFilter !== 'ALL' ? 'Try adjusting your search or filters.' : 'Click "Add Leave Request" above to apply for time off.'}
-              icon={<CalendarPlus className="h-7 w-7" />}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-150 bg-slate-100/70 text-xs uppercase font-semibold text-away">
-                  <tr>
-                    <th className="px-5 py-3.5 cursor-pointer select-none hover:text-ink" onClick={() => toggleSort('leave_type')}>
-                      <div className="flex items-center gap-1.5">
-                        Leave Type
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </th>
-                    <th className="px-5 py-3.5 cursor-pointer select-none hover:text-ink" onClick={() => toggleSort('start_date')}>
-                      <div className="flex items-center gap-1.5">
-                        Dates & Duration
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </th>
-                    <th className="px-5 py-3.5 cursor-pointer select-none hover:text-ink" onClick={() => toggleSort('status')}>
-                      <div className="flex items-center gap-1.5">
-                        Status
-                        <ArrowUpDown className="h-3 w-3" />
-                      </div>
-                    </th>
-                    <th className="px-5 py-3.5">Reason & Remarks</th>
-                    <th className="px-5 py-3.5">Reviewer Note</th>
-                    <th className="px-5 py-3.5 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-150">
-                  {paginatedItems.map((leave) => (
-                    <tr key={leave.id} className="hover:bg-slate-50/80 transition">
-                      <td className="px-5 py-4 font-semibold text-ink whitespace-nowrap">
-                        {LEAVE_TYPE_LABEL[leave.leave_type]}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <div className="text-ink font-medium tabular">
-                          {fmtDate(leave.start_date, 'd MMM yyyy')} – {fmtDate(leave.end_date, 'd MMM yyyy')}
-                        </div>
-                        <span className="text-xs font-semibold text-away">{leave.days} working day{leave.days === 1 ? '' : 's'}</span>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <Pill tone={LEAVE_STATUS_TONE[leave.status]}>
-                          {titleCase(leave.status)}
-                        </Pill>
-                      </td>
-                      <td className="px-5 py-4 max-w-xs text-ink-600 truncate">
-                        {leave.remarks || <span className="text-away italic">No remarks</span>}
-                      </td>
-                      <td className="px-5 py-4 max-w-xs text-ink-600">
-                        {leave.review_comment ? (
-                          <div className="text-xs rounded-lg bg-slate-100 p-2">
-                            <span className="font-semibold text-ink">{leave.reviewer_name || 'HR'}:</span> {leave.review_comment}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-away italic">Awaiting review</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right whitespace-nowrap">
-                        {leave.status === 'PENDING' ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => withdraw(leave.id)}
-                            icon={<Trash2 className="h-3.5 w-3.5 text-rose-500" />}
-                          >
-                            Withdraw
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-away">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Datatable Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-150 px-5 py-3 text-xs text-away">
-              <div>
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, sortedItems.length)} of {sortedItems.length} entries
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-ink-600 hover:bg-slate-150 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <span className="px-2 font-bold text-ink">{page} / {totalPages}</span>
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-ink-600 hover:bg-slate-150 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* PAGE 2: ADD LEAVE REQUEST FORM */}
-      {view === 'add' && (
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader
-            title="New Leave Application"
-            subtitle="Weekends and public holidays are excluded from day count."
-          />
-
-          <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5 p-6">
-            <FormBanner message={banner} />
-
-            <Field label="Leave Category" htmlFor="leave_type" error={errors.leave_type?.message} required>
-              <Select id="leave_type" invalid={!!errors.leave_type} {...register('leave_type')}>
-                <option value="PAID">Paid Leave (Annual / Privilege)</option>
-                <option value="SICK">Sick Leave (Medical / Health)</option>
-                <option value="UNPAID">Unpaid Leave (Loss of Pay)</option>
-              </Select>
-            </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="From Date" htmlFor="start_date" error={errors.start_date?.message} required>
-                <Input id="start_date" type="date" invalid={!!errors.start_date} {...register('start_date')} />
-              </Field>
-
-              <Field label="To Date" htmlFor="end_date" error={errors.end_date?.message} required>
-                <Input id="end_date" type="date" invalid={!!errors.end_date} {...register('end_date')} />
-              </Field>
-            </div>
-
-            {/* Calculated Working Days Banner */}
-            <div className="flex items-center justify-between rounded-xl bg-flow-50 px-4 py-3 border border-flow-100">
-              <div className="flex items-center gap-2 text-sm font-semibold text-flow-700">
-                <Clock className="h-4 w-4 text-flow-600" />
-                Duration Calculation
-              </div>
-              <span className="rounded-lg bg-flow-600 px-3 py-1 text-xs font-bold text-white tabular">
-                {computedDays} Working Day{computedDays === 1 ? '' : 's'}
+          {/* Sick Leave Balance Card */}
+          <div className="relative flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200/80 bg-white p-3.5 sm:p-4 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                Sick Leave Quota
+              </span>
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-50 text-amber-700">
+                <Icon icon="mdi:medical-bag" className="h-4 w-4" />
               </span>
             </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold tracking-tight text-amber-700">
+                {balance.sick_remaining} <span className="text-xs font-normal text-away">/ {balance.sick_total}d</span>
+              </span>
+              <span className="text-[11px] font-semibold text-away">
+                {balance.sick_used}d used
+              </span>
+            </div>
+          </div>
 
-            <Field label="Reason & Remarks" htmlFor="remarks" error={errors.remarks?.message} hint="Provide detail for your HR officer to speed up approval.">
-              <Textarea id="remarks" rows={4} placeholder="e.g. Doctor appointment / family obligation / personal leave" {...register('remarks')} />
-            </Field>
+          {/* Pending Reviews Card */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter('PENDING')}
+            className={`relative flex flex-col justify-between overflow-hidden rounded-xl border p-3.5 sm:p-4 transition-all cursor-pointer ${
+              statusFilter === 'PENDING'
+                ? 'border-amber-500 bg-amber-50/20 ring-2 ring-amber-500/20 shadow-xs'
+                : 'border-slate-200/80 bg-white hover:border-amber-200 hover:shadow-xs'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                Pending Approvals
+              </span>
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-100 text-amber-700">
+                <Icon icon="mdi:clock-outline" className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold tracking-tight text-amber-700">
+                {pendingCount}
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
+                Awaiting HR
+              </span>
+            </div>
+          </div>
 
-            <Field label="Proof / Supporting Document" htmlFor="proof" hint="Optional: Medical certificate, invitation, or supporting document (PDF, PNG, JPG).">
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 bg-slate-50/50">
-                <Paperclip className="h-5 w-5 text-away shrink-0" />
-                <input
-                  id="proof"
-                  type="file"
-                  onChange={(e) => setProofFile(e.target.files?.[0] || null)}
-                  className="text-xs text-ink-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-flow-600 file:shadow-sm hover:file:bg-slate-100"
+          {/* Approved Leaves Card */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter('APPROVED')}
+            className={`relative flex flex-col justify-between overflow-hidden rounded-xl border p-3.5 sm:p-4 transition-all cursor-pointer ${
+              statusFilter === 'APPROVED'
+                ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-500/20 shadow-xs'
+                : 'border-slate-200/80 bg-white hover:border-emerald-200 hover:shadow-xs'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                Days Taken YTD
+              </span>
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-100 text-emerald-700">
+                <Icon icon="mdi:calendar-check" className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold tracking-tight text-emerald-700">
+                {totalDaysTaken}d
+              </span>
+              <span className="text-[11px] font-semibold text-emerald-600">
+                {approvedCount} requests
+              </span>
+            </div>
+          </div>
+        </div>
+
+      )}
+
+      {/* Notifications / Banners */}
+      <FormBanner message={banner} />
+      {ok && (
+        <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800 border border-emerald-200">
+          <div className="flex items-center gap-2">
+            <Icon icon="mdi:check-circle" className="h-4 w-4 text-emerald-600" />
+            <span>{ok}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOk(null)}
+            className="text-emerald-600 hover:text-emerald-800"
+          >
+            <Icon icon="mdi:close" className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Controls Bar: Filters on Left, Search on Right */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        {/* Left Side: Status & Type Filters */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full text-xs font-medium sm:w-36"
+          >
+            <option value="ALL">All Status</option>
+            <option value="PENDING">Pending Only</option>
+            <option value="APPROVED">Approved Only</option>
+            <option value="REJECTED">Rejected Only</option>
+          </Select>
+
+          <Select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="w-full text-xs font-medium sm:w-36"
+          >
+            <option value="ALL">All Types</option>
+            <option value="PAID">Paid Leave</option>
+            <option value="SICK">Sick Leave</option>
+            <option value="UNPAID">Unpaid Leave</option>
+          </Select>
+        </div>
+
+        {/* Right Side: Search Input */}
+        <div className="relative w-full sm:w-64 md:w-72">
+          <Icon
+            icon="mdi:magnify"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-away"
+          />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search reasons or type..."
+            className="pl-10 text-xs py-2"
+          />
+        </div>
+      </div>
+
+      {/* Loading Skeletons */}
+      {loading && !data && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="space-y-4">
+            {[0, 1, 2, 3].map((n) => (
+              <Skeleton key={n} className="h-12 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && <ErrorState message={error} onRetry={reload} />}
+
+      {/* TanStack Data Table View */}
+      {requests && (
+        <DataTable
+          columns={columns}
+          data={filteredRequests}
+          totalCount={requests.items.length}
+          emptyMessage="No leave requests found matching your filters."
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* New Leave Request Modal Dialog                           */}
+      {/* ======================================================== */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl border border-slate-150 animate-in zoom-in-95 duration-150"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-flow-50 text-flow-600 border border-flow-100">
+                  <Icon icon="mdi:calendar-plus" className="h-5 w-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-ink">Request Time Off</h3>
+                  <p className="text-xs text-away">Submit leave for HR officer approval</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <Icon icon="mdi:close" className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <Field label="Leave Type" htmlFor="leave-type" error={errors.leave_type?.message}>
+                <Select id="leave-type" {...register('leave_type')} className="text-sm">
+                  <option value="PAID">
+                    Paid leave ({balance ? balance.paid_remaining : 0} days remaining)
+                  </option>
+                  <option value="SICK">
+                    Sick leave ({balance ? balance.sick_remaining : 0} days remaining)
+                  </option>
+                  <option value="UNPAID">Unpaid leave (loss of pay)</option>
+                </Select>
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Start Date" htmlFor="start-date" error={errors.start_date?.message}>
+                  <Input id="start-date" type="date" {...register('start_date')} className="text-sm" />
+                </Field>
+                <Field label="End Date" htmlFor="end-date" error={errors.end_date?.message}>
+                  <Input id="end-date" type="date" {...register('end_date')} className="text-sm" />
+                </Field>
+              </div>
+
+              {/* Working Days Calculated Preview */}
+              <div className="rounded-xl bg-slate-50 p-3 border border-slate-200/80 flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-600">Calculated working days:</span>
+                <span className="font-bold text-ink bg-flow-100 text-flow-800 px-2 py-0.5 rounded-md">
+                  {computedDays} working day{computedDays === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <Field label="Reason / Remarks" htmlFor="leave-remarks" error={errors.remarks?.message}>
+                <Textarea
+                  id="leave-remarks"
+                  placeholder="e.g. Attending family function, medical appointment..."
+                  {...register('remarks')}
+                  className="min-h-[70px] text-xs"
                 />
-                {proofFile && (
-                  <span className="text-xs font-medium text-present flex items-center gap-1">
-                    <FileText className="h-3.5 w-3.5" />
-                    {proofFile.name}
-                  </span>
-                )}
-              </div>
-            </Field>
+              </Field>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-150 pt-4 mt-2">
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Button type="button" variant="secondary" size="sm" onClick={saveDraft}>
-                  Save Draft
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={handleReset}>
-                  Reset
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => setView('list')}
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-xs"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   loading={isSubmitting}
-                  icon={<CalendarPlus className="h-4 w-4" />}
+                  className="flex items-center gap-1.5 text-xs font-bold"
                 >
-                  Submit Leave Request
+                  <Icon icon="mdi:send-outline" className="h-4 w-4" />
+                  <span>Submit Request</span>
                 </Button>
               </div>
-            </div>
-
-          </form>
-        </Card>
+            </form>
+          </div>
+        </div>
       )}
-    </>
+    </div>
   )
 }

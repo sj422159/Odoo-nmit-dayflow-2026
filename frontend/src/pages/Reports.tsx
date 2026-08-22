@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Icon } from '@iconify/react'
 import { api } from '@/api/client'
-import type { MyPayroll, Payslip } from '@/api/types'
+import type { AttendanceDay, AttendanceSummary, MyPayroll, Payslip } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
@@ -13,33 +14,37 @@ import {
   Skeleton,
 } from '@/components/ui/Primitives'
 import { DataTable } from '@/components/ui/DataTable'
-import { fmtMoney, monthName } from '@/lib/format'
+import { fmtDate, fmtDuration, fmtMoney, fmtTime, monthName, STATUS_LABEL, STATUS_TONE } from '@/lib/format'
 
-export default function Payroll() {
+export default function Reports() {
+  const location = useLocation()
+  const isPayslip = location.pathname.includes('payslip')
+
   const [search, setSearch] = useState('')
   const [selectedSlip, setSelectedSlip] = useState<Payslip | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      const res = await api.get<MyPayroll>('/payroll/me')
-      localStorage.setItem('dayflow.cache.payroll', JSON.stringify(res))
-      return res
-    } catch (err) {
-      const cached = localStorage.getItem('dayflow.cache.payroll')
-      if (cached) {
-        return JSON.parse(cached) as MyPayroll
-      }
-      throw err
-    }
-  }, [])
+  // Load employee payroll history and attendance records
+  const load = useCallback(
+    () =>
+      Promise.all([
+        api.get<MyPayroll>('/payroll/me'),
+        api.get<AttendanceSummary>('/attendance/me/week'),
+      ]),
+    [],
+  )
 
   const { data, loading, error, reload } = useAsync(load, [])
+  useLiveRefresh(
+    ['attendance.checked_in', 'attendance.checked_out', 'attendance.updated', 'payroll.run_completed'],
+    reload,
+  )
 
-  useLiveRefresh(['payroll.structure_updated', 'payroll.run_completed'], reload)
+  const payroll = data?.[0]
+  const attendance = data?.[1]
 
-  const payslips = data?.payslips ?? []
+  const payslips = payroll?.payslips ?? []
 
-  // Filtered Payslips
+  // Filtered Payslips for Report Table
   const filteredPayslips = useMemo(() => {
     return payslips.filter((slip) => {
       if (!search.trim()) return true
@@ -49,8 +54,19 @@ export default function Payroll() {
     })
   }, [payslips, search])
 
-  // TanStack Column Definitions
-  const columns = useMemo<ColumnDef<Payslip>[]>(
+  // Filtered Daily Records for Report Table
+  const filteredDaily = useMemo(() => {
+    return (attendance?.days ?? []).filter((day) => {
+      if (!search.trim()) return true
+      const q = search.toLowerCase()
+      const dateStr = fmtDate(day.work_date, 'EEE d MMM yyyy').toLowerCase()
+      const statusStr = day.status ? STATUS_LABEL[day.status].toLowerCase() : 'weekend'
+      return dateStr.includes(q) || statusStr.includes(q)
+    })
+  }, [attendance?.days, search])
+
+  // TanStack Columns for Payslip Report Table
+  const payslipColumns = useMemo<ColumnDef<Payslip>[]>(
     () => [
       {
         id: 'period',
@@ -59,7 +75,7 @@ export default function Payroll() {
         cell: ({ row }) => (
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-flow-50 text-flow-700 border border-flow-100">
-              <Icon icon="mdi:calendar-month-outline" className="h-4 w-4" />
+              <Icon icon="mdi:file-document-outline" className="h-4 w-4" />
             </span>
             <div>
               <p className="font-semibold text-xs text-ink">
@@ -113,7 +129,7 @@ export default function Payroll() {
       },
       {
         accessorKey: 'deductions',
-        header: 'Deductions & Tax',
+        header: 'Deductions & Taxes',
         cell: ({ row }) => (
           <span className="text-xs font-semibold text-rose-600 tabular">
             -{fmtMoney(row.original.deductions, row.original.currency)}
@@ -161,27 +177,144 @@ export default function Payroll() {
     [],
   )
 
+  // TanStack Columns for Attendance Report Table
+  const attendanceColumns = useMemo<ColumnDef<AttendanceDay>[]>(
+    () => [
+      {
+        accessorKey: 'work_date',
+        header: 'Date & Day',
+        cell: ({ row }) => {
+          const date = row.original.work_date
+          return (
+            <div>
+              <p className="font-semibold text-ink text-xs">{fmtDate(date, 'EEE, d MMM yyyy')}</p>
+              <p className="text-[11px] text-away">{fmtDate(date, 'yyyy-MM-dd')}</p>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'shift',
+        header: 'Shift Schedule',
+        cell: () => (
+          <span className="text-xs text-away tabular font-mono">
+            09:00 – 18:00 (9h)
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'check_in',
+        header: 'Check In',
+        cell: ({ row }) => {
+          const checkIn = row.original.check_in
+          return checkIn ? (
+            <span className="text-xs font-semibold text-slate-700 tabular bg-slate-100 px-2 py-1 rounded-md">
+              {fmtTime(checkIn)}
+            </span>
+          ) : (
+            <span className="text-xs text-away">—</span>
+          )
+        },
+      },
+      {
+        accessorKey: 'check_out',
+        header: 'Check Out',
+        cell: ({ row }) => {
+          const { check_in, check_out } = row.original
+          if (check_out) {
+            return (
+              <span className="text-xs font-semibold text-slate-700 tabular bg-slate-100 px-2 py-1 rounded-md">
+                {fmtTime(check_out)}
+              </span>
+            )
+          }
+          if (check_in) {
+            return (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Active Shift
+              </span>
+            )
+          }
+          return <span className="text-xs text-away">—</span>
+        },
+      },
+      {
+        accessorKey: 'worked_minutes',
+        header: 'Hours Worked',
+        cell: ({ row }) => {
+          const minutes = row.original.worked_minutes
+          return (
+            <span className="text-xs font-bold text-ink tabular">
+              {minutes ? fmtDuration(minutes) : '0h 00m'}
+            </span>
+          )
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: 'Attendance Status',
+        cell: ({ row }) => {
+          const st = row.original.status
+          if (!st) {
+            return (
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500 border border-slate-200">
+                Weekend
+              </span>
+            )
+          }
+          if (st === 'PRESENT') {
+            return (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200">
+                Present
+              </span>
+            )
+          }
+          if (st === 'ABSENT') {
+            return (
+              <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700 border border-rose-200">
+                Absent
+              </span>
+            )
+          }
+          return (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold border ${STATUS_TONE[st].chip}`}>
+              {STATUS_LABEL[st]}
+            </span>
+          )
+        },
+      },
+    ],
+    [],
+  )
+
   return (
     <div className="space-y-6">
-      {/* Minimal Page Header */}
+      {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <PageHeader
-            title="Payslips"
-            description="View your monthly salary statements, gross earnings, itemized deductions, and take-home pay."
+            title={isPayslip ? 'Payslip Report' : 'Attendance Report'}
+            description={
+              isPayslip
+                ? 'Itemized tabular statement report of your monthly compensation, deductions, and net payouts.'
+                : 'Detailed tabular report of your daily attendance, shift timings, and logged working hours.'
+            }
           />
         </div>
 
-        {/* Count Badge */}
+        {/* Total Records Badge */}
         <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 border border-slate-200 self-start sm:self-auto">
-          Total: {payslips.length} Statements
+          Total: {isPayslip ? payslips.length : attendance?.days.length ?? 0} Records
         </span>
       </div>
 
       {/* Search Bar Controls */}
       <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-ink">Salary Statements Log</span>
+          <span className="text-xs font-bold text-ink">
+            {isPayslip ? 'Salary Statements Log' : 'Daily Shift Log'}
+          </span>
         </div>
 
         <div className="relative w-full sm:w-64 md:w-72">
@@ -192,7 +325,7 @@ export default function Payroll() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search month or period..."
+            placeholder={isPayslip ? 'Search month or period...' : 'Search date or status...'}
             className="pl-10 text-xs py-2"
           />
         </div>
@@ -202,7 +335,7 @@ export default function Payroll() {
       {loading && !data && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="space-y-4">
-            {[0, 1, 2, 3].map((n) => (
+            {[0, 1, 2, 3, 4].map((n) => (
               <Skeleton key={n} className="h-12 w-full rounded-xl" />
             ))}
           </div>
@@ -212,13 +345,27 @@ export default function Payroll() {
       {/* Error state */}
       {error && <ErrorState message={error} onRetry={reload} />}
 
-      {/* TanStack Data Table */}
-      {data && (
+      {/* ======================================================== */}
+      {/* 1. ATTENDANCE REPORT TABULAR DATA TABLE                  */}
+      {/* ======================================================== */}
+      {!isPayslip && data && (
         <DataTable
-          columns={columns}
+          columns={attendanceColumns}
+          data={filteredDaily}
+          totalCount={attendance?.days.length ?? 0}
+          emptyMessage="No attendance records found for this report period."
+        />
+      )}
+
+      {/* ======================================================== */}
+      {/* 2. PAYSLIP REPORT TABULAR DATA TABLE                     */}
+      {/* ======================================================== */}
+      {isPayslip && data && (
+        <DataTable
+          columns={payslipColumns}
           data={filteredPayslips}
           totalCount={payslips.length}
-          emptyMessage="No payslips on file yet. Once HR runs payroll, statements will appear here."
+          emptyMessage="No payslip statement reports on file."
         />
       )}
 
@@ -239,9 +386,9 @@ export default function Payroll() {
                   <Icon icon="mdi:receipt-text-outline" className="h-5 w-5" />
                 </span>
                 <div>
-                  <h3 className="text-base font-bold text-ink">Payslip Breakdown</h3>
+                  <h3 className="text-base font-bold text-ink">Statement Breakdown</h3>
                   <p className="text-xs text-away">
-                    {monthName(selectedSlip.period_month)} {selectedSlip.period_year} Statement
+                    {monthName(selectedSlip.period_month)} {selectedSlip.period_year} Report
                   </p>
                 </div>
               </div>
@@ -264,23 +411,23 @@ export default function Payroll() {
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Working Days:</span>
+                  <span>Total Working Days:</span>
                   <span className="font-bold text-ink">{selectedSlip.working_days}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Paid Days:</span>
+                  <span>Credited Paid Days:</span>
                   <span className="font-bold text-emerald-700">{selectedSlip.paid_days}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>LOP / Unpaid Days:</span>
+                  <span>Loss of Pay (LOP) Days:</span>
                   <span className="font-bold text-rose-600">{selectedSlip.lop_days}</span>
                 </div>
               </div>
 
-              {/* Financial Summary */}
+              {/* Financial Breakdown */}
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                  <span className="font-medium text-slate-600">Gross Earnings:</span>
+                  <span className="font-medium text-slate-600">Gross Salary:</span>
                   <span className="font-semibold text-ink tabular">
                     {fmtMoney(selectedSlip.gross, selectedSlip.currency)}
                   </span>

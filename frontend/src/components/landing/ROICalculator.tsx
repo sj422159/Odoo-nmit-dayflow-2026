@@ -68,16 +68,16 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                     step={10}
                     value={employeeCount}
                     onChange={(e) => setEmployeeCount(Number(e.target.value))}
-                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-primary bg-gray-200
+                    className="roi-slider w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-teal bg-gray-200
                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zim-primary
+                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zim-teal
                       [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer
                       [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
                       [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full
-                      [&::-moz-range-thumb]:bg-zim-primary [&::-moz-range-thumb]:border-2
+                      [&::-moz-range-thumb]:bg-zim-teal [&::-moz-range-thumb]:border-2
                       [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
                     style={{
-                      background: `linear-gradient(to right, var(--color-zim-primary) 0%, var(--color-zim-primary) ${sliderPercent}%, #e5e7eb ${sliderPercent}%, #e5e7eb 100%)`,
+                      background: `linear-gradient(to right, var(--color-zim-teal) 0%, var(--color-zim-teal) ${sliderPercent}%, #e5e7eb ${sliderPercent}%, #e5e7eb 100%)`,
                     }}
                   />
                 </div>
@@ -96,7 +96,7 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                 type="button"
                 onClick={onOpenDemo}
                 className="mt-4 inline-flex items-center justify-center gap-2 bg-zim-primary hover:bg-zim-primary-hover
-                  text-white font-semibold text-base px-7 py-3.5 rounded-xl transition-colors duration-200 w-fit
+                  text-zim-primary font-semibold text-base px-7 py-3.5 rounded-xl transition-colors duration-200 w-fit
                   shadow-md hover:shadow-lg cursor-pointer"
               >
                 Get Full Custom ROI Report
@@ -106,7 +106,7 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
 
             {/* Right Column - Results */}
             <div className="bg-gradient-to-br from-zim-navy-dark to-zim-navy-deep p-8 md:p-10 lg:p-12 flex flex-col gap-8 justify-center">
-              <h3 className="font-heading text-xl md:text-2xl font-bold text-white">
+              <h3 className="font-heading text-xl md:text-2xl font-bold text-zim-primary-light">
                 Estimated Annual Impact
               </h3>
 
@@ -116,10 +116,10 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                   <Icon icon="mdi:clock-outline" className="text-zim-teal-light text-2xl" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-white/70 text-sm font-medium">
+                  <span className="text-zim-primary-light/80 text-sm font-medium">
                     HR Administrative Hours Saved / Month
                   </span>
-                  <span className="text-white font-bold text-2xl md:text-3xl tabular-nums font-heading">
+                  <span className="text-zim-primary-light font-bold text-2xl md:text-3xl tabular-nums font-heading">
                     {hoursSaved.toLocaleString('en-IN')} Hours
                   </span>
                 </div>
@@ -131,10 +131,10 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                   <Icon icon="mdi:currency-inr" className="text-zim-amber-light text-2xl" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-white/70 text-sm font-medium">
+                  <span className="text-zim-primary-light/80 text-sm font-medium">
                     Estimated Annual Operational Savings
                   </span>
-                  <span className="text-white font-bold text-2xl md:text-3xl tabular-nums font-heading">
+                  <span className="text-zim-primary-light font-bold text-2xl md:text-3xl tabular-nums font-heading">
                     {formattedSavings}
                   </span>
                 </div>
@@ -146,11 +146,11 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                   <Icon icon="mdi:check-decagram" className="text-emerald-400 text-2xl" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-white/70 text-sm font-medium">
+                  <span className="text-zim-primary-light/80 text-sm font-medium">
                     Payroll Accuracy & Compliance Rate
                   </span>
                   <div className="flex items-center gap-3">
-                    <span className="text-white font-bold text-2xl md:text-3xl font-heading">
+                    <span className="text-zim-primary-light font-bold text-2xl md:text-3xl font-heading">
                       99.9%
                     </span>
                     <span className="text-emerald-400 text-sm font-semibold bg-emerald-400/10 px-2.5 py-0.5 rounded-full">

@@ -170,7 +170,7 @@ export default function Navbar({ onOpenDemo, onLogin }: NavbarProps) {
             </button>
             <button
               onClick={onOpenDemo}
-              className="inline-flex items-center rounded-xl bg-zim-primary px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-zim-primary/20 transition-all hover:bg-zim-primary-hover hover:shadow-lg hover:shadow-zim-primary/30 active:scale-98 cursor-pointer"
+              className="inline-flex items-center rounded-xl bg-zim-primary px-5 py-2.5 text-sm font-bold text-slate-900 shadow-md shadow-zim-primary/20 transition-all hover:bg-zim-primary-hover hover:shadow-lg hover:shadow-zim-primary/30 active:scale-98 cursor-pointer"
             >
               Schedule a Demo
             </button>
@@ -254,7 +254,7 @@ export default function Navbar({ onOpenDemo, onLogin }: NavbarProps) {
               setMobileOpen(false);
               onOpenDemo?.();
             }}
-            className="w-full flex items-center justify-center rounded-xl bg-zim-primary px-4 py-3 text-sm font-bold text-white shadow-md transition-colors hover:bg-zim-primary-hover cursor-pointer"
+            className="w-full flex items-center justify-center rounded-xl bg-zim-primary px-4 py-3 text-sm font-bold text-slate-900 shadow-md transition-colors hover:bg-zim-primary-hover cursor-pointer"
           >
             Schedule a Demo
           </button>

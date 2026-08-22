@@ -83,8 +83,8 @@ export default function ChatWidget() {
           {/* Header */}
           <div className="bg-zim-navy-dark p-4 flex items-center justify-between text-white">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zim-primary to-zim-purple flex items-center justify-center text-white text-sm font-bold">
-                <Icon icon="mdi:robot-outline" className="w-5 h-5" />
+              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center overflow-hidden">
+                <img src="/chatbot-logo.svg" alt="" className="h-full w-full object-cover" />
               </div>
               <div>
                 <h4 className="font-heading font-bold text-sm leading-tight">
@@ -112,8 +112,8 @@ export default function ChatWidget() {
                 className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role === 'ai' && (
-                  <div className="w-7 h-7 rounded-full bg-zim-primary/10 text-zim-primary flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    T
+                  <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
+                    <img src="/chatbot-logo.svg" alt="" className="h-full w-full object-cover" />
                   </div>
                 )}
                 <div
@@ -130,8 +130,8 @@ export default function ChatWidget() {
 
             {isTyping && (
               <div className="flex gap-2.5 items-center text-text-muted text-xs">
-                <div className="w-7 h-7 rounded-full bg-zim-primary/10 text-zim-primary flex items-center justify-center shrink-0 text-xs">
-                  <Icon icon="mdi:loading" className="w-3.5 h-3.5 animate-spin" />
+                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                  <img src="/chatbot-logo.svg" alt="" className="h-full w-full object-cover animate-pulse" />
                 </div>
                 <span className="italic font-mono text-[11px]">Dayflow is typing...</span>
               </div>
@@ -165,10 +165,14 @@ export default function ChatWidget() {
       {/* Floating Action Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 rounded-full bg-gradient-to-r from-zim-primary to-zim-purple text-white shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer"
+        className="w-14 h-14 rounded-full bg-white shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer overflow-hidden"
         aria-label="Open AI Assistant"
       >
-        <Icon icon={isOpen ? 'mdi:close' : 'mdi:chat-processing-outline'} className="w-7 h-7" />
+        {isOpen ? (
+          <Icon icon="mdi:close" className="w-7 h-7 text-zim-navy-dark" />
+        ) : (
+          <img src="/chatbot-logo.svg" alt="" className="h-full w-full object-cover" />
+        )}
       </button>
     </div>
   )
