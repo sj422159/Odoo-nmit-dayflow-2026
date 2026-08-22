@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/landing/Navbar'
 import HeroSection from '@/components/landing/HeroSection'
 import AgenticAI from '@/components/landing/AgenticAI'
-import Industries from '@/components/landing/Industries'
 import WhyZimyo from '@/components/landing/WhyZimyo'
 import ROICalculator from '@/components/landing/ROICalculator'
 import Testimonials from '@/components/landing/Testimonials'
-import CTABanner from '@/components/landing/CTABanner'
 import Footer from '@/components/landing/Footer'
 import DemoModal from '@/components/landing/DemoModal'
 import ChatWidget from '@/components/landing/ChatWidget'
@@ -36,11 +34,9 @@ export default function LandingPage() {
       <Navbar onOpenDemo={() => openDemoModal()} onLogin={handleLoginClick} />
       <HeroSection onOpenDemo={openDemoModal} />
       <AgenticAI />
-      <Industries />
       <WhyZimyo />
       <ROICalculator onOpenDemo={() => openDemoModal()} />
       <Testimonials />
-      <CTABanner onOpenDemo={() => openDemoModal()} />
       <Footer />
       <DemoModal
         isOpen={isDemoModalOpen}
