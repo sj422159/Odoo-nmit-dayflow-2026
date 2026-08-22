@@ -6,6 +6,7 @@ import { AppShell } from '@/components/AppShell'
 import { RedirectIfSignedIn, RequireAdmin, RequireAuth } from '@/components/RouteGuards'
 import { Skeleton } from '@/components/ui/Primitives'
 
+const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const SignIn = lazy(() => import('@/pages/SignIn'))
 const SignUp = lazy(() => import('@/pages/SignUp'))
 const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'))
@@ -42,12 +43,13 @@ export default function App() {
       <RealtimeProvider>
         <Suspense fallback={<PageFallback />}>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/landing" element={<LandingPage />} />
             <Route path="/signin" element={<RedirectIfSignedIn><SignIn /></RedirectIfSignedIn>} />
             <Route path="/signup" element={<RedirectIfSignedIn><SignUp /></RedirectIfSignedIn>} />
             <Route path="/verify" element={<VerifyEmail />} />
 
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/attendance" element={<Attendance />} />

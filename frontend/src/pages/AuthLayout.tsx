@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { DayRibbon } from '@/components/DayRibbon'
 
 const SAMPLE = [
@@ -21,10 +22,9 @@ export function AuthLayout({ title, subtitle, children, footer }: Props) {
     <div className="min-h-screen lg:grid lg:grid-cols-[1.1fr_1fr]">
       {/* The product's own artifact — a week of day ribbons — carries the left panel. */}
       <aside className="hidden flex-col justify-between bg-ink p-10 lg:flex">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-flow-500 font-bold text-white">D</span>
-          <span className="text-base font-bold tracking-tight text-white">Dayflow</span>
-        </div>
+        <Link to="/" className="inline-flex items-center">
+          <img src="/tecryst-logo-white.png" alt="TeCryst" className="h-9 w-auto object-contain" />
+        </Link>
 
         <div className="max-w-md">
           <p className="text-eyebrow uppercase text-flow-300">Every workday, perfectly aligned</p>
@@ -59,10 +59,9 @@ export function AuthLayout({ title, subtitle, children, footer }: Props) {
 
       <main className="flex min-h-screen items-center justify-center bg-paper px-4 py-10">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-flow-500 font-bold text-white">D</span>
-            <span className="text-base font-bold tracking-tight text-ink">Dayflow</span>
-          </div>
+          <Link to="/" className="mb-8 inline-flex items-center lg:hidden">
+            <img src="/tecryst-logo-dark.png" alt="TeCryst" className="h-8 w-auto object-contain" />
+          </Link>
           <h1 className="text-display tracking-tight text-ink">{title}</h1>
           <p className="mb-7 mt-1.5 text-sm text-ink-600">{subtitle}</p>
           <div className="rounded-2xl border border-slate-150 bg-white p-6 shadow-card">{children}</div>
