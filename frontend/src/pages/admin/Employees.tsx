@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
 import { ApiError, api } from '@/api/client'
-import type { EmployeeSummary, Paginated } from '@/api/types'
+import type { Department, EmployeeSummary, Paginated } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
@@ -14,8 +14,8 @@ export default function Employees() {
   const [debounced, setDebounced] = useState('')
   const [department, setDepartment] = useState('')
   const [page, setPage] = useState(1)
-  const [departments, setDepartments] = useState<string[]>([])
-  const [codes, setCodes] = useState<Record<number, string>>({})
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [assignment, setAssignment] = useState<Record<number, string>>({})
   const [approvalError, setApprovalError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function Employees() {
   }, [search])
 
   useEffect(() => {
-    api.get<string[]>('/employees/departments').then(setDepartments).catch(() => setDepartments([]))
+    api.get<Department[]>('/employees/departments').then(setDepartments).catch(() => setDepartments([]))
   }, [])
 
   const load = useCallback(
@@ -48,7 +48,11 @@ export default function Employees() {
   const approve = async (employee: EmployeeSummary) => {
     setApprovalError(null)
     try {
-      await api.post(`/employees/${employee.id}/approve`, { employee_code: codes[employee.id] })
+      const selected = assignment[employee.id] ?? 'overall'
+      await api.post(`/employees/${employee.id}/approve`, {
+        assignment_scope: selected === 'overall' ? 'overall' : 'department',
+        department_id: selected === 'overall' ? undefined : Number(selected),
+      })
       await reloadPending()
     } catch (err) {
       setApprovalError(err instanceof ApiError ? err.message : 'Unable to approve this request.')
@@ -69,8 +73,20 @@ export default function Employees() {
             {pending.items.map((employee) => (
               <li key={employee.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p><p className="truncate text-sm text-away">{employee.email}</p></div>
-                <Input className="w-32" placeholder="DF-1042" value={codes[employee.id] ?? ''} onChange={(e) => setCodes({ ...codes, [employee.id]: e.target.value.toUpperCase() })} aria-label={`Employee ID for ${employee.full_name}`} />
-                <Button size="sm" onClick={() => approve(employee)} disabled={!codes[employee.id]} icon={<Check className="h-4 w-4" />}>Approve</Button>
+                <Select
+                  className="w-52"
+                  value={assignment[employee.id] ?? 'overall'}
+                  onChange={(e) => setAssignment({ ...assignment, [employee.id]: e.target.value })}
+                  aria-label={`Employee ID scope for ${employee.full_name}`}
+                >
+                  <option value="overall">Overall employee (DF)</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name} ({department.code})
+                    </option>
+                  ))}
+                </Select>
+                <Button size="sm" onClick={() => approve(employee)} icon={<Check className="h-4 w-4" />}>Approve</Button>
               </li>
             ))}
           </ul>
@@ -97,8 +113,8 @@ export default function Employees() {
         >
           <option value="">All departments</option>
           {departments.map((dept) => (
-            <option key={dept} value={dept}>
-              {titleCase(dept)}
+            <option key={dept.id} value={dept.name}>
+              {titleCase(dept.name)}
             </option>
           ))}
         </Select>

@@ -27,6 +27,9 @@ class Employee(Base, TimestampMixin):
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     department: Mapped[str] = mapped_column(String(80), nullable=False, default="Unassigned", index=True)
+    department_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     designation: Mapped[str] = mapped_column(String(80), nullable=False, default="Associate")
     employment_type: Mapped[str] = mapped_column(
         String(16), nullable=False, default=EmploymentType.FULL_TIME.value
@@ -37,6 +40,7 @@ class Employee(Base, TimestampMixin):
     )
 
     user: Mapped["User"] = relationship(back_populates="employee")  # noqa: F821
+    department_record: Mapped[Optional["Department"]] = relationship(back_populates="employees")  # noqa: F821
     manager: Mapped[Optional["Employee"]] = relationship(remote_side="Employee.id")
     documents: Mapped[List["EmployeeDocument"]] = relationship(
         back_populates="employee", cascade="all, delete-orphan"

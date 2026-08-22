@@ -76,6 +76,14 @@ export interface Paginated<T> {
   pages: number
 }
 
+export interface Department {
+  id: number
+  name: string
+  code: string
+  next_employee_number: number
+  is_active: boolean
+}
+
 export interface AttendanceRecord {
   id: number
   employee_id: number

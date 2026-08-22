@@ -114,3 +114,32 @@ class PaginatedEmployees(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class DepartmentCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=80)
+    code: str = Field(..., min_length=2, max_length=8)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        value = value.strip()
+        if not re.match(r"^[A-Za-z][A-Za-z &'\-]*$", value):
+            raise ValueError("Use letters, spaces, ampersands, apostrophes or hyphens only.")
+        return value
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, value: str) -> str:
+        value = value.strip().upper()
+        if not re.match(r"^[A-Z]{2,8}$", value):
+            raise ValueError("Use 2-8 letters for the department code.")
+        return value
+
+
+class DepartmentOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    next_employee_number: int
+    is_active: bool

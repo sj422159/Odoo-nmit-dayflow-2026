@@ -21,6 +21,7 @@ class TimestampMixin:
 # Imported for their side effect: registering tables on Base.metadata.
 from app.models import (  # noqa: E402,F401
     attendance,
+    department,
     employee,
     leave,
     notification,
