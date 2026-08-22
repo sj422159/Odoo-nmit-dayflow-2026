@@ -18,7 +18,7 @@ export function fmtDuration(minutes: number): string {
   return `${hours}h ${String(rest).padStart(2, '0')}m`
 }
 
-export function fmtMoney(amount: string | number, currency = 'USD'): string {
+export function fmtMoney(amount: string | number, currency = 'INR'): string {
   const value = typeof amount === 'string' ? Number(amount) : amount
   if (Number.isNaN(value)) return '—'
   return new Intl.NumberFormat(undefined, {

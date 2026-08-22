@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -8,7 +8,7 @@ from app.schemas.employee import SalaryStructureOut
 
 
 class SalaryStructureUpdate(BaseModel):
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Literal["INR"] = "INR"
     basic: Decimal = Field(..., ge=0, le=Decimal("9999999.99"))
     hra: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("9999999.99"))
     allowances: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("9999999.99"))
@@ -18,9 +18,7 @@ class SalaryStructureUpdate(BaseModel):
     @field_validator("currency")
     @classmethod
     def _upper(cls, v: str) -> str:
-        if not v.isalpha():
-            raise ValueError("Currency uses three letters, like USD.")
-        return v.upper()
+        return v
 
 
 class PayslipOut(BaseModel):

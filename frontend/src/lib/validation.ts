@@ -88,7 +88,7 @@ const money = (label: string) =>
     .refine((v) => Number(v) <= 9999999.99, 'That is above the maximum of 9,999,999.99.')
 
 export const salarySchema = z.object({
-  currency: z.string().length(3, 'Use a three-letter code, like USD.'),
+  currency: z.string().length(3, 'Payroll currency is INR.').refine((value) => value.toUpperCase() === 'INR', 'Payroll currency is INR.'),
   basic: money('the basic pay'),
   hra: money('the housing allowance'),
   allowances: money('other allowances'),

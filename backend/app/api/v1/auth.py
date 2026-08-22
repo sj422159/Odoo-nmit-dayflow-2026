@@ -155,6 +155,16 @@ def create_admin(
     )
     db.add(user)
     db.commit()
+    db.refresh(user)
+    db.add(Employee(
+        user_id=user.id,
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        department="Unassigned",
+        designation="HR Administrator",
+        date_of_joining=date.today(),
+    ))
+    db.commit()
     return SignUpResponse(message=f"HR admin access created for {email}.")
 
 
