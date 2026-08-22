@@ -60,3 +60,11 @@ class LeaveBalance(Base, TimestampMixin):
     unpaid_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     employee: Mapped["Employee"] = relationship()  # noqa: F821
+
+    @property
+    def paid_remaining(self) -> int:
+        return max(self.paid_total - self.paid_used, 0)
+
+    @property
+    def sick_remaining(self) -> int:
+        return max(self.sick_total - self.sick_used, 0)

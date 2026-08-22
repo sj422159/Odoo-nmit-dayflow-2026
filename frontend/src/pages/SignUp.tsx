@@ -28,9 +28,10 @@ export default function SignUp() {
     formState: { errors, isSubmitting },
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    mode: 'onBlur',
+    mode: 'onChange',
     defaultValues: { role: 'EMPLOYEE', organization: 'TeCryst Technologies', department: '', designation: '' },
   })
+
 
   const password = watch('password') ?? ''
   const selectedRole = watch('role') ?? 'EMPLOYEE'
@@ -157,17 +158,19 @@ export default function SignUp() {
 
         {/* Name Fields */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
+          <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} hint="Letters only" required>
             <Input
               id="first_name"
+              placeholder="e.g. Sarah"
               autoComplete="off"
               invalid={!!errors.first_name}
               {...register('first_name')}
             />
           </Field>
-          <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} required>
+          <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} hint="Letters only" required>
             <Input
               id="last_name"
+              placeholder="e.g. Jenkins"
               autoComplete="off"
               invalid={!!errors.last_name}
               {...register('last_name')}
@@ -176,10 +179,11 @@ export default function SignUp() {
         </div>
 
         {/* Work Email Field */}
-        <Field label="Work email" htmlFor="email" error={errors.email?.message} required>
+        <Field label="Work email" htmlFor="email" error={errors.email?.message} hint="Official work email" required>
           <Input
             id="email"
             type="email"
+            placeholder="e.g. sarah.jenkins@company.com"
             autoComplete="off"
             invalid={!!errors.email}
             {...register('email')}
@@ -189,20 +193,21 @@ export default function SignUp() {
         {/* Optional Department and Job Title (Employee only) */}
         {selectedRole === 'EMPLOYEE' && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Department" htmlFor="department" error={errors.department?.message}>
-              <Input id="department" autoComplete="off" {...register('department')} />
+            <Field label="Department" htmlFor="department" error={errors.department?.message} hint="Optional">
+              <Input id="department" placeholder="e.g. Engineering" autoComplete="off" {...register('department')} />
             </Field>
-            <Field label="Job title" htmlFor="designation" error={errors.designation?.message}>
-              <Input id="designation" autoComplete="off" {...register('designation')} />
+            <Field label="Job title" htmlFor="designation" error={errors.designation?.message} hint="Optional">
+              <Input id="designation" placeholder="e.g. Software Engineer" autoComplete="off" {...register('designation')} />
             </Field>
           </div>
         )}
 
         {/* Password Field */}
-        <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+        <Field label="Password" htmlFor="password" error={errors.password?.message} hint="Min 10 characters" required>
           <Input
             id="password"
             type="password"
+            placeholder="••••••••••••"
             autoComplete="new-password"
             invalid={!!errors.password}
             {...register('password')}
@@ -229,15 +234,17 @@ export default function SignUp() {
         </ul>
 
         {/* Confirm Password Field */}
-        <Field label="Repeat password" htmlFor="confirm_password" error={errors.confirm_password?.message} required>
+        <Field label="Repeat password" htmlFor="confirm_password" error={errors.confirm_password?.message} hint="Must match password" required>
           <Input
             id="confirm_password"
             type="password"
+            placeholder="••••••••••••"
             autoComplete="new-password"
             invalid={!!errors.confirm_password}
             {...register('confirm_password')}
           />
         </Field>
+
 
         <Button
           type="submit"

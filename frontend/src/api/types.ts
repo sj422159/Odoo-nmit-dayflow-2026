@@ -270,3 +270,83 @@ export interface LivePresence {
     since: string | null
   }[]
 }
+
+export interface ActivityEvent {
+  id: string
+  category: string
+  title: string
+  description: string | null
+  timestamp: string
+  badge_tone?: string | null
+}
+
+export interface EmployeeActivityRow {
+  employee_id: number
+  full_name: string
+  employee_code: string | null
+  email: string
+  department: string
+  designation: string
+  avatar_url: string | null
+  work_date: string
+  status: AttendanceStatus | null
+  check_in: string | null
+  check_out: string | null
+  worked_minutes: number
+  activity_count: number
+}
+
+export interface PaginatedActivityHistory extends Paginated<EmployeeActivityRow> {}
+
+export interface ChatMessageCreate {
+  recipient_type: string
+  recipient_id?: number | null
+  target_department?: string | null
+  message_type: 'DIRECT' | 'ANNOUNCEMENT'
+  content: string
+}
+
+export interface ChatMessageOut {
+  id: number
+  sender_type: string
+  sender_id: number
+  sender_name: string
+  recipient_type: string
+  recipient_id?: number | null
+  target_department?: string | null
+  message_type: 'DIRECT' | 'ANNOUNCEMENT'
+  content: string
+  is_read: boolean
+  read_at?: string | null
+  created_at: string
+}
+
+export interface ChatChannelOut {
+  id: string
+  title: string
+  subtitle?: string | null
+  avatar_url?: string | null
+  role: string
+  contact_id?: number | null
+  contact_type: string
+  is_announcement: boolean
+  unread_count: number
+  last_message?: string | null
+  last_message_at?: string | null
+}
+
+export interface Holiday {
+
+  id: number
+  name: string
+  date: string
+  day_of_week: string
+  type: 'PUBLIC' | 'COMPANY' | 'OPTIONAL'
+  description?: string | null
+  is_active: boolean
+  created_at: string
+}
+
+
+
+

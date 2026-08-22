@@ -1,10 +1,12 @@
 import asyncio
 import logging
 
+import os
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
@@ -15,6 +17,11 @@ from app.services.realtime import bus
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
 )
+
+# Ensure resources directory exists
+resources_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "resources")
+os.makedirs(resources_dir, exist_ok=True)
+os.makedirs("resources", exist_ok=True)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -28,6 +35,8 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+app.mount("/resources", StaticFiles(directory="resources"), name="resources")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -35,6 +44,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 @app.exception_handler(RequestValidationError)

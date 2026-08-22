@@ -78,6 +78,8 @@ def read_today(
         checked_out=bool(record and record.check_out),
         check_in=record.check_in if record else None,
         check_out=record.check_out if record else None,
+        worked_minutes=record.worked_minutes if record else 0,
+        status=AttendanceStatus(record.status) if (record and record.status) else None,
     )
 
 

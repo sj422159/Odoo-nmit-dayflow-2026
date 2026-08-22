@@ -59,7 +59,11 @@ async function toError(res: Response): Promise<ApiError> {
   let fields: Record<string, string> = {}
   try {
     const body = await res.json()
-    if (typeof body.detail === 'string') detail = body.detail
+    if (typeof body.detail === 'string') {
+      detail = body.detail
+    } else if (Array.isArray(body.detail)) {
+      detail = body.detail.map((e: any) => `${e.loc ? e.loc.join('.') : 'error'}: ${e.msg}`).join('; ')
+    }
     if (body.fields && typeof body.fields === 'object') fields = body.fields
   } catch {
     if (res.status === 0) detail = 'Cannot reach the server. Check that the API is running.'
@@ -87,8 +91,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     })
   }
 
+  const isFormData = body instanceof FormData
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (body !== undefined && !isFormData) headers['Content-Type'] = 'application/json'
   if (auth) {
     const token = tokens.access()
     if (token) headers.Authorization = `Bearer ${token}`
@@ -99,7 +104,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     res = await fetch(url.toString().replace(window.location.origin, ''), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Check that the API is running.')
@@ -116,6 +121,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
+
 
 export const api = {
   get: <T,>(path: string, query?: RequestOptions['query']) => request<T>(path, { query }),

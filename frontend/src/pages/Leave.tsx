@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import Swal from 'sweetalert2'
 import {
+
   ArrowLeft,
   ArrowUpDown,
   CalendarPlus,
@@ -17,7 +19,9 @@ import { ApiError, api } from '@/api/client'
 import type { LeaveBalance, LeaveList } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
+import { queuePendingAction } from '@/lib/offlineQueue'
 import { PageHeader } from '@/components/PageHeader'
+
 import { StatCard } from '@/components/StatCard'
 import {
   Button,
@@ -57,29 +61,57 @@ export default function Leave() {
   // Proof file state
   const [proofFile, setProofFile] = useState<File | null>(null)
 
-  const load = useCallback(
-    () =>
-      Promise.all([
+  const load = useCallback(async () => {
+
+    try {
+      const res = await Promise.all([
         api.get<LeaveBalance>('/leave/balance/me'),
         api.get<LeaveList>('/leave/requests/me', { page_size: 100 }),
-      ]),
-    [],
-  )
+      ])
+      localStorage.setItem('dayflow.cache.leave', JSON.stringify(res))
+      return res
+    } catch (err) {
+      const cached = localStorage.getItem('dayflow.cache.leave')
+      if (cached) {
+        return JSON.parse(cached) as [LeaveBalance, LeaveList]
+      }
+      throw err
+    }
+  }, [])
   const { data, loading, error, reload } = useAsync(load, [])
   useLiveRefresh(['leave.approved', 'leave.rejected'], reload)
+
 
   const {
     register,
     handleSubmit,
     reset,
+    getValues,
     watch,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<LeaveValues>({
     resolver: zodResolver(leaveSchema),
-    mode: 'onBlur',
+    mode: 'onChange',
     defaultValues: { leave_type: 'PAID', start_date: isoDate(new Date()), end_date: isoDate(new Date()), remarks: '' },
   })
+
+  const saveDraft = () => {
+    const values = getValues()
+    localStorage.setItem('dayflow.draft.leave', JSON.stringify(values))
+    setOk('Leave application draft saved to your browser.')
+    setTimeout(() => setOk(null), 3000)
+  }
+
+  const handleReset = () => {
+    localStorage.removeItem('dayflow.draft.leave')
+    reset({ leave_type: 'PAID', start_date: isoDate(new Date()), end_date: isoDate(new Date()), remarks: '' })
+    setProofFile(null)
+    setBanner(null)
+    setOk('Form reset to initial defaults.')
+    setTimeout(() => setOk(null), 3000)
+  }
+
 
   const startDateVal = watch('start_date')
   const endDateVal = watch('end_date')
@@ -100,8 +132,25 @@ export default function Leave() {
   }, [startDateVal, endDateVal])
 
   const onSubmit = async (values: LeaveValues) => {
+
     setBanner(null)
     setOk(null)
+    if (!navigator.onLine) {
+      const payload = {
+        ...values,
+        remarks: values.remarks?.trim() || null,
+      }
+      await queuePendingAction('LEAVE_REQUEST', payload)
+      window.dispatchEvent(new CustomEvent('dayflow:queue-updated'))
+      Swal.fire({
+        icon: 'warning',
+        title: 'Saved Offline!',
+        text: 'You are currently offline. Your leave application has been queued locally with a "Pending Sync" badge and will auto-submit when online.',
+        confirmButtonColor: '#0284c7',
+      })
+      setView('list')
+      return
+    }
     try {
       await api.post('/leave/requests', {
         ...values,
@@ -113,6 +162,7 @@ export default function Leave() {
       await reload()
       setView('list')
     } catch (err) {
+
       if (err instanceof ApiError) {
         Object.entries(err.fields).forEach(([field, message]) =>
           setError(field as keyof LeaveValues, { message }),
@@ -462,7 +512,7 @@ export default function Leave() {
             </div>
 
             <Field label="Reason & Remarks" htmlFor="remarks" error={errors.remarks?.message} hint="Provide detail for your HR officer to speed up approval.">
-              <Textarea id="remarks" rows={4} placeholder="Describe the reason for your time off request..." {...register('remarks')} />
+              <Textarea id="remarks" rows={4} placeholder="e.g. Doctor appointment / family obligation / personal leave" {...register('remarks')} />
             </Field>
 
             <Field label="Proof / Supporting Document" htmlFor="proof" hint="Optional: Medical certificate, invitation, or supporting document (PDF, PNG, JPG).">
@@ -483,22 +533,33 @@ export default function Leave() {
               </div>
             </Field>
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-150 pt-4 mt-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setView('list')}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                loading={isSubmitting}
-                icon={<CalendarPlus className="h-4 w-4" />}
-              >
-                Submit Leave Request
-              </Button>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-150 pt-4 mt-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button type="button" variant="secondary" size="sm" onClick={saveDraft}>
+                  Save Draft
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={handleReset}>
+                  Reset
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setView('list')}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  loading={isSubmitting}
+                  icon={<CalendarPlus className="h-4 w-4" />}
+                >
+                  Submit Leave Request
+                </Button>
+              </div>
             </div>
+
           </form>
         </Card>
       )}

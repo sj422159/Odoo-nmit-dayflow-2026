@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
@@ -20,7 +21,8 @@ class HROfficer(Base, TimestampMixin):
     phone: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     department: Mapped[str] = mapped_column(String(80), nullable=False, default="Human Resources")
     designation: Mapped[str] = mapped_column(String(80), nullable=False, default="HR Officer")
-    avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     created_by_corpadmin_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("corp_admins.id", ondelete="SET NULL"), nullable=True
     )

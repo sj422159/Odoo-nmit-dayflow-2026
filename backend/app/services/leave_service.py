@@ -58,6 +58,10 @@ def pending_days(db: Session, employee_id: int, year: Optional[int] = None) -> i
     return sum(r.days for r in rows if r.start_date.year == year)
 
 
+def count_pending_days(db: Session, employee_id: int, year: Optional[int] = None) -> int:
+    return pending_days(db, employee_id, year)
+
+
 def assert_sufficient_balance(db: Session, employee_id: int, leave_type: LeaveType, days: int) -> None:
     if leave_type == LeaveType.UNPAID:
         return

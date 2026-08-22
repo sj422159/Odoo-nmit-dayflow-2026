@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Building2,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -16,9 +17,16 @@ import {
 import { useAuth } from '@/context/AuthContext'
 import { useRealtime } from '@/context/RealtimeContext'
 import { api } from '@/api/client'
+import { MessageSquare } from 'lucide-react'
 import type { EmployeeSummary, Paginated } from '@/api/types'
 import { NotificationBell } from '@/components/NotificationBell'
+import { HeaderHistoryPanel } from '@/components/HeaderHistoryPanel'
+import { HeaderChatButton } from '@/components/HeaderChatButton'
+import { OfflineBanner } from '@/components/OfflineBanner'
+import { PWAInstallButton } from '@/components/PWAInstallButton'
 import { initials } from '@/lib/format'
+
+
 import { cx } from '@/components/ui/Primitives'
 
 interface NavItem {
@@ -33,8 +41,9 @@ const EMPLOYEE_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/leave', label: 'Time off', icon: CalendarDays },
+  { to: '/holidays', label: 'Holidays', icon: CalendarDays },
   { to: '/payroll', label: 'Pay', icon: Wallet },
-  { to: '/profile', label: 'Profile', icon: UserRound },
+  { to: '/chat', label: 'Messages', icon: MessageSquare },
 ]
 
 const ADMIN_NAV: NavItem[] = [
@@ -43,17 +52,24 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/departments', label: 'Departments', icon: Building2 },
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
   { to: '/admin/leave', label: 'Approvals', icon: CalendarDays, badge: 'pending' },
+  { to: '/holidays', label: 'Holidays', icon: CalendarDays },
   { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
+  { to: '/chat', label: 'Messages', icon: MessageSquare },
+  { to: '/admin/history', label: 'History', icon: History },
   { to: '/admin/insights', label: 'Insights', icon: BarChart3 },
-  { to: '/profile', label: 'Profile', icon: UserRound },
 ]
+
+
+
 
 export function AppShell() {
   const { session, isAdmin, signOut } = useAuth()
   const { snapshot, subscribe } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
   const [pendingAccess, setPendingAccess] = useState(0)
+  const [avatarErr, setAvatarErr] = useState(false)
   const location = useLocation()
+
   const navigate = useNavigate()
 
   const items = isAdmin ? ADMIN_NAV : EMPLOYEE_NAV
@@ -136,17 +152,26 @@ export function AppShell() {
           <nav className="flex flex-col gap-1">{items.map((item) => link(item))}</nav>
         </div>
         <div className="border-t border-white/10 pt-3">
-          <div className="flex items-center gap-2.5 px-2 py-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-xs font-bold text-white">
-              {initials(session?.full_name ?? '')}
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block truncate text-sm font-semibold text-white">{session?.full_name}</span>
-              <span className="block truncate text-[11px] text-white/50">
-                {isAdmin ? 'HR administrator' : session?.designation}
+          <PWAInstallButton variant="sidebar" />
+          <Link
+            to="/profile"
+
+            className="flex items-center justify-between rounded-xl px-2.5 py-2 text-white/80 transition-all hover:bg-white/10 hover:text-white group"
+            title="View & Edit Profile"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-xs font-bold text-white group-hover:bg-flow-600 transition-colors">
+                {initials(session?.full_name ?? '')}
               </span>
-            </span>
-          </div>
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate text-sm font-semibold text-white">{session?.full_name}</span>
+                <span className="block truncate text-[11px] text-white/50">
+                  {isAdmin ? 'HR administrator' : session?.designation}
+                </span>
+              </span>
+            </div>
+            <UserRound className="h-4 w-4 shrink-0 text-white/40 group-hover:text-white transition-colors" />
+          </Link>
           <button
             type="button"
             onClick={handleSignOut}
@@ -181,20 +206,33 @@ export function AppShell() {
               </div>
               <nav className="flex flex-col gap-1">{items.map((item) => link(item, true))}</nav>
             </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/60 hover:bg-white/5 hover:text-white"
-            >
-              <LogOut className="h-[18px] w-[18px]" aria-hidden />
-              Sign out
-            </button>
+            <div className="border-t border-white/10 pt-3">
+              <Link
+                to="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/80 hover:bg-white/10 hover:text-white mb-1"
+              >
+                <UserRound className="h-[18px] w-[18px]" aria-hidden />
+                Profile
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/60 hover:bg-white/5 hover:text-white"
+              >
+                <LogOut className="h-[18px] w-[18px]" aria-hidden />
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <OfflineBanner />
+
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-150 bg-white/85 px-4 py-3 backdrop-blur lg:px-8">
+
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -207,12 +245,33 @@ export function AppShell() {
             <img src="/tecryst-logo-dark.png" alt="TeCryst" className="h-7 w-auto object-contain" />
           </Link>
           <div className="ml-auto flex items-center gap-3">
+
+            <PWAInstallButton variant="header" />
+            <HeaderChatButton />
+            <HeaderHistoryPanel />
             <NotificationBell />
-            <span className="hidden h-9 w-9 place-items-center rounded-full bg-flow-50 text-xs font-bold text-flow-600 sm:grid">
-              {initials(session?.full_name ?? '')}
-            </span>
+
+
+            <Link
+              to="/profile"
+              title="View Profile"
+              className="hidden h-9 w-9 place-items-center overflow-hidden rounded-full bg-flow-50 text-xs font-bold text-flow-600 ring-2 ring-slate-200 transition-all hover:bg-flow-100 hover:ring-flow-400 sm:grid"
+            >
+              {session?.avatar_url && !avatarErr ? (
+                <img
+                  src={session.avatar_url}
+                  alt={session.full_name}
+                  onError={() => setAvatarErr(true)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials(session?.full_name ?? '')
+              )}
+            </Link>
+
           </div>
         </header>
+
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">
           <Outlet />

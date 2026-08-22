@@ -178,8 +178,22 @@ export default function Employees() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader title="Employees" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeader title="Employees" description="Manage team members, roles, and attendance." />
+        <div className="flex items-center gap-2">
+          <Link to="/admin/history">
+            <Button variant="secondary" className="flex items-center gap-2 shadow-xs">
+              <Icon icon="mdi:history" className="h-4 w-4 text-flow-600" />
+              <span>Activity History</span>
+            </Button>
+          </Link>
+          <Link to="/admin/employees/new">
+            <Button className="flex items-center gap-2 shadow-xs">
+              <Icon icon="mdi:account-plus-outline" className="h-4 w-4" />
+              <span>Add Employee</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Compact Bento Status Cards */}

@@ -39,6 +39,19 @@ export default function DepartmentCreation() {
     load()
   }, [load])
 
+  const saveDraft = () => {
+    localStorage.setItem('dayflow.draft.dept', JSON.stringify({ name, code }))
+    setModalError('Department draft saved.')
+    setTimeout(() => setModalError(null), 3000)
+  }
+
+  const handleReset = () => {
+    localStorage.removeItem('dayflow.draft.dept')
+    setName('')
+    setCode('')
+    setModalError(null)
+  }
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     setModalError(null)
@@ -48,6 +61,7 @@ export default function DepartmentCreation() {
         name: name.trim(),
         code: code.trim().toUpperCase(),
       })
+      localStorage.removeItem('dayflow.draft.dept')
       setDepartments((current) => [...current, department].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setCode('')
@@ -58,6 +72,7 @@ export default function DepartmentCreation() {
       setSaving(false)
     }
   }
+
 
   // Filtered Items
   const filteredItems = useMemo(() => {
@@ -252,12 +267,12 @@ export default function DepartmentCreation() {
             <form onSubmit={create} className="space-y-4 pt-4">
               <FormBanner message={modalError} />
 
-              <Field label="Department Name" htmlFor="modal-dept-name" required>
+              <Field label="Department Name" htmlFor="modal-dept-name" hint="Official department title" required>
                 <Input
                   id="modal-dept-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Engineering, Human Resources, Finance"
+                  placeholder="e.g. Engineering"
                   required
                   className="text-sm"
                   autoFocus
@@ -267,7 +282,7 @@ export default function DepartmentCreation() {
               <Field
                 label="Department Code"
                 htmlFor="modal-dept-code"
-                hint="2 to 8 uppercase letters (e.g. ENG, HR, FIN, MKT)"
+                hint="2 to 8 uppercase letters (e.g. ENG, HR, FIN)"
                 required
               >
                 <Input
@@ -294,24 +309,35 @@ export default function DepartmentCreation() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-xs"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  loading={saving}
-                  className="flex items-center gap-1.5 text-xs font-bold"
-                >
-                  <Icon icon="mdi:check" className="h-4 w-4" />
-                  <span>Create Department</span>
-                </Button>
+              <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <Button type="button" variant="secondary" size="sm" onClick={saveDraft} className="text-xs">
+                    Save Draft
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={handleReset} className="text-xs">
+                    Reset
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setIsModalOpen(false)}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    loading={saving}
+                    className="flex items-center gap-1.5 text-xs font-bold"
+                  >
+                    <Icon icon="mdi:check" className="h-4 w-4" />
+                    <span>Create Department</span>
+                  </Button>
+                </div>
               </div>
+
             </form>
           </div>
         </div>

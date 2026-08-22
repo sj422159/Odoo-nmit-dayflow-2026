@@ -12,8 +12,22 @@ import { CorporatePayslipModal } from '@/components/CorporatePayslipModal'
 import { fmtMoney, monthName } from '@/lib/format'
 
 export default function Payroll() {
-  const load = useCallback(() => api.get<MyPayroll>('/payroll/me'), [])
+  const load = useCallback(async () => {
+
+    try {
+      const res = await api.get<MyPayroll>('/payroll/me')
+      localStorage.setItem('dayflow.cache.payroll', JSON.stringify(res))
+      return res
+    } catch (err) {
+      const cached = localStorage.getItem('dayflow.cache.payroll')
+      if (cached) {
+        return JSON.parse(cached) as MyPayroll
+      }
+      throw err
+    }
+  }, [])
   const { data, loading, error, reload } = useAsync(load, [])
+
   useLiveRefresh(['payroll.structure_updated', 'payroll.run_completed'], reload)
 
   const [selectedSlip, setSelectedSlip] = useState<Payslip | null>(null)

@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.security import validate_password_strength
 from app.models.enums import EmploymentType, Role
 
 PHONE_RE = re.compile(r"^\+?[0-9][0-9 \-]{6,19}$")
@@ -73,7 +74,8 @@ class EmployeeSelfUpdate(BaseModel):
 
     phone: Optional[str] = Field(default=None, max_length=24)
     address: Optional[str] = Field(default=None, max_length=500)
-    avatar_url: Optional[str] = Field(default=None, max_length=512)
+    avatar_url: Optional[str] = Field(default=None)
+
 
     _validate_phone = field_validator("phone")(_clean_phone)
 
@@ -143,3 +145,35 @@ class DepartmentOut(BaseModel):
     code: str
     next_employee_number: int
     is_active: bool
+
+
+class EmployeeCreate(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=80)
+    last_name: str = Field(..., min_length=1, max_length=80)
+    email: EmailStr
+    password: str = Field(..., min_length=10, max_length=128)
+    phone: Optional[str] = Field(default=None, max_length=24)
+    address: Optional[str] = Field(default=None, max_length=500)
+    department: str = Field(default="Unassigned", min_length=2, max_length=80)
+    designation: str = Field(default="Associate", min_length=2, max_length=80)
+    employment_type: EmploymentType = EmploymentType.FULL_TIME
+    date_of_joining: date = Field(default_factory=date.today)
+    manager_id: Optional[int] = None
+    role: Role = Role.EMPLOYEE
+    avatar_url: Optional[str] = None
+
+    _validate_phone = field_validator("phone")(_clean_phone)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _name_format(cls, v: str) -> str:
+        v = v.strip()
+        if not re.match(r"^[A-Za-z][A-Za-z '\-]*$", v):
+            raise ValueError("Use letters, spaces, apostrophes or hyphens only.")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        validate_password_strength(v)
+        return v

@@ -109,9 +109,36 @@ export const adminEmployeeSchema = z.object({
   address: z.string().or(z.literal('')),
 })
 
+export const employeeCreateSchema = z.object({
+  first_name: z
+    .string()
+    .min(1, 'Enter first name.')
+    .regex(/^[A-Za-z][A-Za-z '-]*$/, 'Letters, spaces, apostrophes and hyphens only.'),
+  last_name: z
+    .string()
+    .min(1, 'Enter last name.')
+    .regex(/^[A-Za-z][A-Za-z '-]*$/, 'Letters, spaces, apostrophes and hyphens only.'),
+  email: z.string().min(1, 'Enter email address.').email('Enter a valid email address.'),
+  password,
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9][0-9 -]{6,19}$/, 'Use 7–20 digits, optionally starting with +.')
+    .or(z.literal('')),
+  address: z.string().max(500, 'Keep under 500 characters.').or(z.literal('')),
+  department: z.string().min(1, 'Select or enter a department.'),
+  designation: z.string().min(1, 'Enter designation / job title.'),
+  employment_type: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
+  date_of_joining: z.string().min(1, 'Pick joining date.'),
+  manager_id: z.string().optional(),
+  role: z.enum(['EMPLOYEE', 'ADMIN']),
+  avatar_url: z.string().or(z.literal('')),
+})
+
 export type SignInValues = z.infer<typeof signInSchema>
 export type SignUpValues = z.infer<typeof signUpSchema>
 export type ProfileValues = z.infer<typeof profileSchema>
 export type LeaveValues = z.infer<typeof leaveSchema>
 export type SalaryValues = z.infer<typeof salarySchema>
 export type AdminEmployeeValues = z.infer<typeof adminEmployeeSchema>
+export type EmployeeCreateValues = z.infer<typeof employeeCreateSchema>

@@ -16,12 +16,18 @@ const Profile = lazy(() => import('@/pages/Profile'))
 const Attendance = lazy(() => import('@/pages/Attendance'))
 const Leave = lazy(() => import('@/pages/Leave'))
 const Payroll = lazy(() => import('@/pages/Payroll'))
+const Chat = lazy(() => import('@/pages/Chat'))
+const Holidays = lazy(() => import('@/pages/Holidays'))
+
 const AdminEmployees = lazy(() => import('@/pages/admin/Employees'))
+
+const AdminAddEmployee = lazy(() => import('@/pages/admin/AddEmployee'))
 const AdminDepartments = lazy(() => import('@/pages/admin/DepartmentCreation'))
 const AdminEmployeeDetail = lazy(() => import('@/pages/admin/EmployeeDetail'))
 const AdminAttendance = lazy(() => import('@/pages/admin/AttendanceBoard'))
 const AdminLeave = lazy(() => import('@/pages/admin/LeaveApprovals'))
 const AdminPayroll = lazy(() => import('@/pages/admin/PayrollAdmin'))
+const AdminActivityHistory = lazy(() => import('@/pages/admin/ActivityHistory'))
 const AdminInsights = lazy(() => import('@/pages/admin/Insights'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -59,13 +65,18 @@ export default function App() {
               <Route path="/attendance" element={<Attendance />} />
               <Route path="/leave" element={<Leave />} />
               <Route path="/payroll" element={<Payroll />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/holidays" element={<Holidays />} />
+
 
               <Route path="/admin/employees" element={<RequireAdmin><AdminEmployees /></RequireAdmin>} />
+              <Route path="/admin/employees/new" element={<RequireAdmin><AdminAddEmployee /></RequireAdmin>} />
               <Route path="/admin/departments" element={<RequireAdmin><AdminDepartments /></RequireAdmin>} />
               <Route path="/admin/employees/:id" element={<RequireAdmin><AdminEmployeeDetail /></RequireAdmin>} />
               <Route path="/admin/attendance" element={<RequireAdmin><AdminAttendance /></RequireAdmin>} />
               <Route path="/admin/leave" element={<RequireAdmin><AdminLeave /></RequireAdmin>} />
               <Route path="/admin/payroll" element={<RequireAdmin><AdminPayroll /></RequireAdmin>} />
+              <Route path="/admin/history" element={<RequireAdmin><AdminActivityHistory /></RequireAdmin>} />
               <Route path="/admin/insights" element={<RequireAdmin><AdminInsights /></RequireAdmin>} />
 
               <Route path="*" element={<NotFound />} />

@@ -14,7 +14,9 @@ export default defineConfig(({ mode }) => {
       // Dev proxy keeps the browser on one origin, so cookies/CORS stay simple.
       proxy: {
         '/api': { target, changeOrigin: true, ws: true },
+        '/resources': { target, changeOrigin: true },
       },
+
     },
     build: { outDir: 'dist', sourcemap: mode !== 'production' },
   }

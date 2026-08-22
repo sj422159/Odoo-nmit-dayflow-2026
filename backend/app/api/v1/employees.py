@@ -1,14 +1,19 @@
+import os
+import time
 from datetime import date
 from math import ceil
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import AnyAccount, get_current_admin, get_current_employee, get_current_user
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
+from app.models.corp_admin import CorpAdmin
 from app.models.department import Department
 from app.models.employee import Employee
 from app.models.hr_officer import HROfficer
@@ -18,12 +23,14 @@ from app.schemas.employee import (
     DepartmentOut,
     DocumentOut,
     EmployeeAdminUpdate,
+    EmployeeCreate,
     EmployeeDetail,
     EmployeeSelfUpdate,
     EmployeeSummary,
     PaginatedEmployees,
     SalaryStructureOut,
 )
+from app.services.leave_service import get_or_create_balance
 from app.services.payroll_service import current_structure
 from app.services.realtime import bus
 
@@ -68,45 +75,156 @@ def _detail(db: Session, employee: Employee, include_salary: bool) -> EmployeeDe
         avatar_url=employee.avatar_url,
         manager_id=employee.manager_id,
         manager_name=employee.manager.full_name if employee.manager else None,
-        salary_structure=SalaryStructureOut.model_validate(sal) if sal else None,
+        salary=SalaryStructureOut.model_validate(sal) if sal else None,
         documents=[
-            DocumentOut(
-                id=doc.id,
-                document_type=doc.document_type,
-                file_path=doc.file_path,
-                original_filename=doc.original_filename,
-                uploaded_at=doc.uploaded_at,
-            )
-            for doc in employee.documents
-        ],
+          DocumentOut(
+              id=doc.id,
+              title=doc.original_filename,
+              category=doc.document_type,
+              file_url=doc.file_path,
+          )
+          for doc in employee.documents
+      ],
     )
 
 
 @router.get("/me", response_model=EmployeeDetail)
 def read_current_employee_profile(
     db: Session = Depends(get_db),
-    employee: Employee = Depends(get_current_employee),
+    account: AnyAccount = Depends(get_current_user),
 ):
-    return _detail(db, employee, include_salary=True)
+    if isinstance(account, Employee):
+        return _detail(db, account, include_salary=True)
+    return EmployeeDetail(
+        id=account.id,
+        employee_code=getattr(account, "employee_code", getattr(account, "hr_code", getattr(account, "admin_code", "ADMIN"))),
+        full_name=account.full_name,
+        first_name=account.first_name,
+        last_name=account.last_name,
+        email=account.email,
+        phone=account.phone,
+        address=None,
+        department=getattr(account, "department", "Corporate"),
+        designation=getattr(account, "designation", "Administrator"),
+        employment_type="FULL_TIME",
+        date_of_joining=date.today(),
+        role=account.role,
+        is_active=account.is_active,
+        is_verified=account.is_verified,
+        approval_status="APPROVED",
+        avatar_url=account.avatar_url,
+        manager_id=None,
+        manager_name=None,
+        salary=None,
+        documents=[],
+    )
+
 
 
 @router.patch("/me", response_model=EmployeeDetail)
 def update_current_employee_profile(
     payload: EmployeeSelfUpdate,
     db: Session = Depends(get_db),
-    employee: Employee = Depends(get_current_employee),
+    account: AnyAccount = Depends(get_current_user),
 ):
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
-        setattr(employee, field, value)
+        if hasattr(account, field):
+            setattr(account, field, value)
+    db.commit()
+    db.refresh(account)
+    if isinstance(account, Employee):
+        bus.publish(
+            "employee.updated",
+            {"employee_id": account.id, "full_name": account.full_name},
+            to_user_ids=[account.id],
+        )
+    return read_current_employee_profile(db, account)
+
+
+@router.post("/me/avatar", response_model=EmployeeDetail)
+
+async def upload_employee_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    account: AnyAccount = Depends(get_current_user),
+):
+    user_dir = os.path.join("resources", str(account.id))
+    os.makedirs(user_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename or "avatar.png")[1] or ".png"
+    filename = f"avatar_{int(time.time())}{ext}"
+    filepath = os.path.join(user_dir, filename)
+
+    contents = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    relative_url = f"/resources/{account.id}/{filename}"
+    account.avatar_url = relative_url
+    db.commit()
+    db.refresh(account)
+
+    if isinstance(account, Employee):
+        bus.publish(
+            "employee.updated",
+            {"employee_id": account.id, "full_name": account.full_name},
+            to_user_ids=[account.id],
+        )
+
+    return read_current_employee_profile(db, account)
+
+
+@router.post("", response_model=EmployeeDetail, status_code=status.HTTP_201_CREATED)
+
+def create_employee(
+    payload: EmployeeCreate,
+    db: Session = Depends(get_db),
+    admin: HROfficer = Depends(get_current_admin),
+):
+    email = payload.email.lower()
+    if (
+        db.scalar(select(Employee).where(func.lower(Employee.email) == email))
+        or db.scalar(select(HROfficer).where(func.lower(HROfficer.email) == email))
+        or db.scalar(select(CorpAdmin).where(func.lower(CorpAdmin.email) == email))
+    ):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email address is already registered.")
+
+    dept = db.scalar(select(Department).where(Department.name == payload.department))
+    if dept:
+        employee_code = f"{dept.code}-{dept.next_employee_number:04d}"
+        dept.next_employee_number += 1
+    else:
+        employee_code = _next_overall_code(db)
+
+    if payload.manager_id and not db.get(Employee, payload.manager_id):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Selected manager does not exist.")
+
+    employee = Employee(
+        employee_code=employee_code,
+        email=email,
+        hashed_password=hash_password(payload.password),
+        first_name=payload.first_name.strip(),
+        last_name=payload.last_name.strip(),
+        phone=payload.phone,
+        address=payload.address,
+        department=payload.department,
+        designation=payload.designation,
+        employment_type=payload.employment_type.value,
+        date_of_joining=payload.date_of_joining,
+        manager_id=payload.manager_id,
+        avatar_url=payload.avatar_url,
+        is_verified=True,
+        is_active=True,
+    )
+    db.add(employee)
+    db.flush()
+    get_or_create_balance(db, employee.id)
     db.commit()
     db.refresh(employee)
-    bus.publish(
-        "employee.updated",
-        {"employee_id": employee.id, "full_name": employee.full_name},
-        to_user_ids=[employee.id],
-    )
-    return _detail(db, employee, include_salary=True)
+
+    bus.publish("employee.created", {"employee_id": employee.id, "full_name": employee.full_name}, to_admins=True)
+    return _detail(db, employee, include_salary=False)
 
 
 @router.get("", response_model=PaginatedEmployees)

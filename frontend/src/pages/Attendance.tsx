@@ -25,16 +25,25 @@ export default function Attendance() {
     return { start: subDays(anchor, 29), end: anchor }
   }, [view, anchor])
 
-  const load = useCallback(
-    () =>
-      api.get<AttendanceSummary>('/attendance/me', {
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get<AttendanceSummary>('/attendance/me', {
         start: isoDate(start),
         end: isoDate(end),
-      }),
-    [start, end],
-  )
+      })
+      localStorage.setItem('dayflow.cache.attendance', JSON.stringify(res))
+      return res
+    } catch (err) {
+      const cached = localStorage.getItem('dayflow.cache.attendance')
+      if (cached) {
+        return JSON.parse(cached) as AttendanceSummary
+      }
+      throw err
+    }
+  }, [start, end])
 
   const { data, loading, error, reload } = useAsync(load, [isoDate(start), isoDate(end)])
+
   useLiveRefresh(['attendance.checked_in', 'attendance.checked_out', 'attendance.updated', 'leave.approved'], reload)
 
   const shift = (direction: -1 | 1) =>

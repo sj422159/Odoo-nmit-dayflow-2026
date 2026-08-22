@@ -28,8 +28,9 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
     formState: { errors, isSubmitting },
   } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    mode: 'onBlur',
+    mode: 'onChange',
   })
+
 
   const onSubmit = async (values: SignInValues) => {
     setBanner(null)
@@ -184,29 +185,39 @@ export default function SignIn({ corporate = false }: { corporate?: boolean }) {
           <FormBanner message={banner} />
 
           <Field
-            label={accessType === 'EXTERNAL' ? 'Email' : 'Work email'}
+            label={accessType === 'EXTERNAL' ? 'Email' : 'Work Email'}
             htmlFor="email"
             error={errors.email?.message}
+            hint="Enter your registered work email"
             required
           >
             <Input
               id="email"
               type="email"
+              placeholder="e.g. alex.morgan@company.com"
               autoComplete="off"
               invalid={!!errors.email}
               {...register('email')}
             />
           </Field>
 
-          <Field label="Password" htmlFor="password" error={errors.password?.message} required>
+          <Field
+            label="Password"
+            htmlFor="password"
+            error={errors.password?.message}
+            hint="Enter your account password"
+            required
+          >
             <Input
               id="password"
               type="password"
+              placeholder="••••••••••••"
               autoComplete="new-password"
               invalid={!!errors.password}
               {...register('password')}
             />
           </Field>
+
 
           <Button
             type="submit"

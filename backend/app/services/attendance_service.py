@@ -47,6 +47,10 @@ def get_record(db: Session, employee_id: int, work_date: date) -> Optional[Atten
     )
 
 
+def get_today_record(db: Session, employee_id: int) -> Optional[AttendanceRecord]:
+    return get_record(db, employee_id, date.today())
+
+
 def check_in(db: Session, employee_id: int, now: Optional[datetime] = None) -> AttendanceRecord:
     now = now or datetime.now(timezone.utc)
     today = now.date()

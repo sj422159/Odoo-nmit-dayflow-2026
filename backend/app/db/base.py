@@ -21,11 +21,15 @@ class TimestampMixin:
 # Imported for their side effect: registering tables on Base.metadata.
 from app.models import (  # noqa: E402,F401
     attendance,
+    chat,
     corp_admin,
     department,
     employee,
+    holiday,
     hr_officer,
     leave,
     notification,
     payroll,
 )
+
+

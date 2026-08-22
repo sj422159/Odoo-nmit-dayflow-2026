@@ -69,5 +69,5 @@ class TodayStatus(BaseModel):
     checked_out: bool
     check_in: Optional[datetime] = None
     check_out: Optional[datetime] = None
-    worked_minutes: int
+    worked_minutes: int = 0
     status: Optional[AttendanceStatus] = None

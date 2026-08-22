@@ -28,7 +28,8 @@ class Employee(Base, TimestampMixin):
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     phone: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    avatar_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     department: Mapped[str] = mapped_column(String(80), nullable=False, default="Unassigned")
     designation: Mapped[str] = mapped_column(String(80), nullable=False, default="Associate")
     employment_type: Mapped[str] = mapped_column(
