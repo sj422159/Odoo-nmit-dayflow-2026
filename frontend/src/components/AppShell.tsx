@@ -13,7 +13,6 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useRealtime } from '@/context/RealtimeContext'
 import { LiveBadge } from '@/components/LiveBadge'
 import { NotificationBell } from '@/components/NotificationBell'
 import { initials } from '@/lib/format'
@@ -42,7 +41,6 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppShell() {
   const { session, isAdmin, signOut } = useAuth()
-  const { connected } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
