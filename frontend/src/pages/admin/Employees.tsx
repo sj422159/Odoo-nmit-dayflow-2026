@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
-import { api } from '@/api/client'
+import { Check, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react'
+import { ApiError, api } from '@/api/client'
 import type { EmployeeSummary, Paginated } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
-import { Button, Card, EmptyState, ErrorState, Input, Pill, Select, Skeleton } from '@/components/ui/Primitives'
+import { Button, Card, CardHeader, EmptyState, ErrorState, Input, Pill, Select, Skeleton } from '@/components/ui/Primitives'
 import { STATUS_LABEL, STATUS_TONE, initials, titleCase } from '@/lib/format'
 
 export default function Employees() {
@@ -15,6 +15,8 @@ export default function Employees() {
   const [department, setDepartment] = useState('')
   const [page, setPage] = useState(1)
   const [departments, setDepartments] = useState<string[]>([])
+  const [codes, setCodes] = useState<Record<number, string>>({})
+  const [approvalError, setApprovalError] = useState<string | null>(null)
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -39,11 +41,41 @@ export default function Employees() {
     [debounced, department, page],
   )
   const { data, loading, error, reload } = useAsync(load, [debounced, department, page])
+  const pendingLoad = useCallback(() => api.get<Paginated<EmployeeSummary>>('/employees/pending-access'), [])
+  const { data: pending, loading: pendingLoading, reload: reloadPending } = useAsync(pendingLoad, [])
   useLiveRefresh(['employee.updated', 'attendance.checked_in', 'attendance.checked_out'], reload)
+
+  const approve = async (employee: EmployeeSummary) => {
+    setApprovalError(null)
+    try {
+      await api.post(`/employees/${employee.id}/approve`, { employee_code: codes[employee.id] })
+      await reloadPending()
+    } catch (err) {
+      setApprovalError(err instanceof ApiError ? err.message : 'Unable to approve this request.')
+    }
+  }
 
   return (
     <>
       <PageHeader title="People" description="Every employee, with today's attendance at a glance." />
+
+      <Card className="mb-5">
+        <CardHeader title="Employee access requests" subtitle="Assign the employee ID before approving access." />
+        {approvalError && <div className="px-5 pt-4"><p className="rounded-xl bg-absent-soft px-3.5 py-3 text-sm font-semibold text-absent">{approvalError}</p></div>}
+        {pendingLoading && !pending && <div className="grid gap-3 p-5"><Skeleton className="h-14" /><Skeleton className="h-14" /></div>}
+        {pending?.items.length === 0 && <EmptyState title="No requests waiting" description="New employee requests will appear here after email confirmation." icon={<Check className="h-7 w-7" />} />}
+        {pending && pending.items.length > 0 && (
+          <ul className="divide-y divide-slate-150">
+            {pending.items.map((employee) => (
+              <li key={employee.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p><p className="truncate text-sm text-away">{employee.email}</p></div>
+                <Input className="w-32" placeholder="DF-1042" value={codes[employee.id] ?? ''} onChange={(e) => setCodes({ ...codes, [employee.id]: e.target.value.toUpperCase() })} aria-label={`Employee ID for ${employee.full_name}`} />
+                <Button size="sm" onClick={() => approve(employee)} disabled={!codes[employee.id]} icon={<Check className="h-4 w-4" />}>Approve</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <div className="mb-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">

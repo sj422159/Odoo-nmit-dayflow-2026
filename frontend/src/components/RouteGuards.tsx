@@ -5,8 +5,10 @@ import { useAuth } from '@/context/AuthContext'
 function Splash() {
   return (
     <div className="grid min-h-screen place-items-center bg-paper">
-      <div className="flex flex-col items-center gap-4">
-        <img src="/tecryst-logo-dark.png" alt="TeCryst" className="h-10 w-auto object-contain animate-pulse" />
+      <div className="flex flex-col items-center gap-3">
+        <span className="grid h-11 w-11 animate-pulse place-items-center rounded-xl bg-flow-500 text-lg font-bold text-white">
+          D
+        </span>
         <p className="text-sm text-away">Opening your workspace…</p>
       </div>
     </div>
@@ -26,6 +28,14 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   if (loading) return <Splash />
   if (!session) return <Navigate to="/signin" replace />
   if (!isAdmin) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
+export function RequireCorporate({ children }: { children: ReactNode }) {
+  const { session, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/corporate/signin" replace />
+  if (session.user.role !== 'CORPORATE') return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 

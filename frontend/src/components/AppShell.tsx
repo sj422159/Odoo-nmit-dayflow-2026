@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
   CalendarCheck,
@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useRealtime } from '@/context/RealtimeContext'
 import { LiveBadge } from '@/components/LiveBadge'
 import { NotificationBell } from '@/components/NotificationBell'
 import { initials } from '@/lib/format'
@@ -22,62 +23,75 @@ interface NavItem {
   to: string
   label: string
   icon: typeof LayoutDashboard
-  adminOnly?: boolean
-  badge?: string | number
+  end?: boolean
+  badge?: 'pending'
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/attendance', label: 'My Attendance', icon: CalendarDays },
-  { to: '/leave', label: 'My Leaves', icon: CalendarCheck },
-  { to: '/payroll', label: 'My Payroll', icon: Wallet },
-  { to: '/profile', label: 'My Profile', icon: UserRound },
-  { to: '/admin/employees', label: 'Employees', icon: Users, adminOnly: true },
-  { to: '/admin/attendance', label: 'Attendance Board', icon: CalendarDays, adminOnly: true },
-  { to: '/admin/leave', label: 'Leave Approvals', icon: CalendarCheck, adminOnly: true },
-  { to: '/admin/payroll', label: 'Payroll Admin', icon: Wallet, adminOnly: true },
-  { to: '/admin/insights', label: 'Insights', icon: BarChart3, adminOnly: true },
+const EMPLOYEE_NAV: NavItem[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
+  { to: '/leave', label: 'Time off', icon: CalendarDays },
+  { to: '/payroll', label: 'Pay', icon: Wallet },
+  { to: '/profile', label: 'Profile', icon: UserRound },
+]
+
+const ADMIN_NAV: NavItem[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/employees', label: 'People', icon: Users },
+  { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
+  { to: '/admin/leave', label: 'Approvals', icon: CalendarDays, badge: 'pending' },
+  { to: '/admin/payroll', label: 'Payroll', icon: Wallet },
+  { to: '/admin/insights', label: 'Insights', icon: BarChart3 },
+  { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
 export function AppShell() {
   const { session, isAdmin, signOut } = useAuth()
+  const { snapshot } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [location.pathname])
+  const items = isAdmin ? ADMIN_NAV : EMPLOYEE_NAV
+  const pending = snapshot.pending_leave_requests ?? 0
 
-  const handleSignOut = async () => {
-    await signOut()
+  useEffect(() => setMenuOpen(false), [location.pathname])
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [menuOpen])
+
+  const handleSignOut = () => {
+    signOut()
     navigate('/signin', { replace: true })
   }
 
-  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
-
-  const link = (item: NavItem, mobile = false) => {
+  const link = (item: NavItem, compact = false) => {
     const Icon = item.icon
+    const count = item.badge === 'pending' ? pending : 0
     return (
       <NavLink
         key={item.to}
         to={item.to}
-        end={item.to === '/dashboard'}
+        end={item.end}
         className={({ isActive }) =>
           cx(
             'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
+            compact ? 'w-full' : '',
             isActive
-              ? 'bg-flow-500 text-white shadow-sm'
-              : 'text-white/70 hover:bg-white/5 hover:text-white',
-            mobile && 'text-base',
+              ? 'bg-white/10 text-white'
+              : 'text-white/60 hover:bg-white/5 hover:text-white',
           )
         }
       >
-        <Icon className="h-5 w-5 shrink-0" aria-hidden />
-        <span className="truncate">{item.label}</span>
-        {item.badge !== undefined && (
-          <span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold text-white">
-            {item.badge}
+        <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
+        <span className="flex-1">{item.label}</span>
+        {count > 0 && (
+          <span className="rounded-full bg-pending px-1.5 py-0.5 text-[10px] font-bold text-white tabular">
+            {count}
           </span>
         )}
       </NavLink>
@@ -85,9 +99,15 @@ export function AppShell() {
   }
 
   const brand = (
-    <Link to="/" className="flex items-center">
-      <img src="/tecryst-logo-white.png" alt="TeCryst" className="h-8 w-auto object-contain" />
-    </Link>
+    <div className="flex items-center gap-2.5">
+      <span className="grid h-8 w-8 place-items-center rounded-lg bg-flow-500 text-sm font-bold text-white">
+        D
+      </span>
+      <span className="leading-tight">
+        <span className="block text-sm font-bold tracking-tight text-white">Dayflow</span>
+        <span className="block text-[11px] text-white/50">Every workday, aligned</span>
+      </span>
+    </div>
   )
 
   return (
@@ -166,9 +186,7 @@ export function AppShell() {
           >
             <Menu className="h-5 w-5" aria-hidden />
           </button>
-          <Link to="/" className="flex items-center lg:hidden">
-            <img src="/tecryst-logo-dark.png" alt="TeCryst" className="h-7 w-auto object-contain" />
-          </Link>
+          <span className="font-bold tracking-tight text-ink lg:hidden">Dayflow</span>
           <div className="ml-auto flex items-center gap-3">
             <LiveBadge className="hidden sm:inline-flex" />
             <NotificationBell />
@@ -181,6 +199,35 @@ export function AppShell() {
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-24 lg:px-8 lg:py-8 lg:pb-8">
           <Outlet />
         </main>
+
+        {/* Mobile tab bar — the five destinations people actually use daily */}
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-150 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+          {items.slice(0, 5).map((item) => {
+            const Icon = item.icon
+            const count = item.badge === 'pending' ? pending : 0
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  cx(
+                    'relative flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors',
+                    isActive ? 'text-flow-600' : 'text-away',
+                  )
+                }
+              >
+                <Icon className="h-5 w-5" aria-hidden />
+                {item.label}
+                {count > 0 && (
+                  <span className="absolute right-[22%] top-1.5 h-4 min-w-[16px] rounded-full bg-pending px-1 text-[10px] font-bold leading-4 text-white tabular">
+                    {count}
+                  </span>
+                )}
+              </NavLink>
+            )
+          })}
+        </nav>
       </div>
     </div>
   )
