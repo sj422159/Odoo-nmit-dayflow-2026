@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Dayflow chatbot</title>
+  <desc id="desc">Friendly robot assistant logo</desc>
+  <g fill="none" stroke="#073f4d" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="20" d="M256 92V57"/>
+    <circle cx="256" cy="38" r="20" fill="#073f4d" stroke-width="12"/>
+    <path stroke-width="20" d="M185 175v-45h142v45"/>
+    <rect x="126" y="146" width="260" height="222" rx="70" fill="#f8fafc" stroke-width="20"/>
+    <path stroke-width="20" d="M126 214H94c-29 0-52 24-52 53s23 53 52 53h32M386 214h32c29 0 52 24 52 53s-23 53-52 53h-32"/>
+    <circle cx="205" cy="248" r="20" fill="#073f4d" stroke-width="12"/>
+    <circle cx="307" cy="248" r="20" fill="#073f4d" stroke-width="12"/>
+    <circle cx="205" cy="248" r="5" fill="#f8fafc" stroke="none"/>
+    <circle cx="307" cy="248" r="5" fill="#f8fafc" stroke="none"/>
+    <path stroke-width="14" d="M231 302c14 20 36 20 50 0"/>
+  </g>
+  <circle cx="180" cy="322" r="12" fill="#f4aa96"/>
+  <circle cx="332" cy="322" r="12" fill="#f4aa96"/>
+</svg>
