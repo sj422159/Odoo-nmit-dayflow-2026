@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'EMPLOYEE'
+export type Role = 'CORPORATE' | 'HR_ADMIN' | 'ADMIN' | 'EMPLOYEE'
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'
 export type LeaveType = 'PAID' | 'SICK' | 'UNPAID'
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
@@ -13,7 +13,7 @@ export interface TokenPair {
 
 export interface SessionUser {
   id: number
-  employee_code: string
+  employee_code: string | null
   email: string
   role: Role
   is_verified: boolean

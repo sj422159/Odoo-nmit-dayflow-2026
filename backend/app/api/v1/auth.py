@@ -5,7 +5,7 @@ from jose import JWTError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_corporate, get_current_user
 from app.core.config import settings
 from app.core.mailer import send_verification_email
 from app.core.security import (
@@ -21,6 +21,7 @@ from app.models.employee import Employee
 from app.models.enums import Role
 from app.models.user import User
 from app.schemas.auth import (
+    AdminCreateRequest,
     RefreshRequest,
     ResendVerificationRequest,
     SessionOut,
@@ -50,15 +51,13 @@ def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
     email = payload.email.lower()
     if db.scalar(select(User).where(func.lower(User.email) == email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered. Sign in instead.")
-    if db.scalar(select(User).where(User.employee_code == payload.employee_code)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "That employee ID is already taken.")
-
     user = User(
-        employee_code=payload.employee_code,
+        employee_code=None,
         email=email,
         hashed_password=hash_password(payload.password),
-        role=payload.role.value,
+        role=Role.EMPLOYEE.value,
         is_verified=settings.AUTO_VERIFY_EMAIL,
+        approval_status="PENDING",
     )
     db.add(user)
     db.flush()
@@ -67,8 +66,8 @@ def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
         user_id=user.id,
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
-        department=payload.department.strip() or "Unassigned",
-        designation=payload.designation.strip() or "Associate",
+        department="Unassigned",
+        designation="Associate",
         date_of_joining=date.today(),
     )
     db.add(employee)
@@ -82,9 +81,9 @@ def sign_up(payload: SignUpRequest, db: Session = Depends(get_db)):
 
     return SignUpResponse(
         message=(
-            "Account created. Open the confirmation link to activate it."
+            "Request submitted. Confirm your email, then wait for HR to approve your access."
             if link
-            else "Account created. You can sign in now."
+            else "Request submitted. HR must approve your access before you can sign in."
         ),
         verification_link=link if settings.APP_ENV == "development" else None,
     )
@@ -112,7 +111,7 @@ def resend_verification(payload: ResendVerificationRequest, db: Session = Depend
     # Same response either way: do not disclose which addresses exist.
     if user and not user.is_verified:
         employee = db.scalar(select(Employee).where(Employee.user_id == user.id))
-        name = employee.full_name if employee else user.employee_code
+        name = employee.full_name if employee else user.email
         link = send_verification_email(user.email, name, create_email_token(user.id))
         return SignUpResponse(
             message="A new confirmation link is on its way.",
@@ -130,9 +129,33 @@ def sign_in(payload: SignInRequest, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This account is deactivated. Contact HR.")
     if not user.is_verified:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Confirm your email address first, then sign in.")
+    if user.approval_status != "APPROVED":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your login request is waiting for HR approval.")
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
     return _token_pair(user)
+
+
+@router.post("/admins", response_model=SignUpResponse, status_code=status.HTTP_201_CREATED)
+def create_admin(
+    payload: AdminCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_corporate),
+):
+    email = payload.email.lower()
+    if db.scalar(select(User).where(func.lower(User.email) == email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered.")
+    user = User(
+        email=email,
+        hashed_password=hash_password(payload.password),
+        role=Role.HR_ADMIN.value,
+        is_verified=True,
+        is_active=True,
+        approval_status="APPROVED",
+    )
+    db.add(user)
+    db.commit()
+    return SignUpResponse(message=f"HR admin access created for {email}.")
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -153,7 +176,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return SessionOut(
         user=UserOut.model_validate(user),
         employee_id=employee.id if employee else None,
-        full_name=employee.full_name if employee else user.employee_code,
+        full_name=employee.full_name if employee else user.email,
         department=employee.department if employee else None,
         designation=employee.designation if employee else None,
         avatar_url=employee.avatar_url if employee else None,

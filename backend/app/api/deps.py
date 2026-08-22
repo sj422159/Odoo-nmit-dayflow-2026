@@ -46,10 +46,19 @@ def get_current_user(
 
 
 def get_current_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != Role.ADMIN.value:
+    if user.role not in (Role.HR_ADMIN.value, Role.ADMIN.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This area is limited to HR administrators.",
+        )
+    return user
+
+
+def get_current_corporate(user: User = Depends(get_current_user)) -> User:
+    if user.role != Role.CORPORATE.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is limited to corporate administrators.",
         )
     return user
 

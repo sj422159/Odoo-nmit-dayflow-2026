@@ -23,6 +23,7 @@ from app.schemas.employee import (
 )
 from app.services.payroll_service import current_structure
 from app.services.realtime import bus
+from app.schemas.auth import EmployeeApprovalRequest
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
@@ -142,6 +143,27 @@ def list_employees(
     )
 
 
+@router.get("/pending-access", response_model=PaginatedEmployees)
+def list_pending_access(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    employees = list(
+        db.scalars(
+            select(Employee).join(Employee.user)
+            .where(User.approval_status == "PENDING")
+            .order_by(Employee.created_at)
+        )
+    )
+    return PaginatedEmployees(
+        items=[_summary(employee) for employee in employees],
+        total=len(employees),
+        page=1,
+        page_size=max(len(employees), 1),
+        pages=1,
+    )
+
+
 @router.get("/departments", response_model=list[str])
 def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return [row[0] for row in db.execute(select(Employee.department).distinct().order_by(Employee.department)).all()]
@@ -154,6 +176,29 @@ def read_employee(
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
+    return _detail(db, employee, include_salary=True)
+
+
+@router.post("/{employee_id}/approve", response_model=EmployeeDetail)
+def approve_employee(
+    employee_id: int,
+    payload: EmployeeApprovalRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
+    if employee.user.approval_status == "APPROVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "This employee already has access.")
+    if db.scalar(select(User).where(User.employee_code == payload.employee_code)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That employee ID is already taken.")
+    employee.user.employee_code = payload.employee_code
+    employee.user.approval_status = "APPROVED"
+    employee.user.is_active = True
+    db.commit()
+    db.refresh(employee)
+    bus.publish("employee.access_approved", {"employee_id": employee.id}, to_user_ids=[employee.user_id])
     return _detail(db, employee, include_salary=True)
 
 

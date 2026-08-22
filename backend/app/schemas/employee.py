@@ -44,7 +44,7 @@ class SalaryStructureOut(BaseModel):
 
 class EmployeeSummary(BaseModel):
     id: int
-    employee_code: str
+    employee_code: Optional[str] = None
     full_name: str
     email: EmailStr
     department: str
