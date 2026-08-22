@@ -53,7 +53,7 @@ def my_payroll(employee: Employee = Depends(get_current_employee), db: Session =
         salary=SalaryStructureOut.model_validate(structure) if structure else None,
         payslips=[_payslip_out(s, employee) for s in slips],
         ytd_net=svc.money(ytd),
-        currency=structure.currency if structure else "USD",
+        currency=structure.currency if structure else "INR",
     )
 
 

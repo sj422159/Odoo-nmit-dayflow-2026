@@ -79,7 +79,7 @@ def run_payroll(db: Session, year: int, month: int) -> Tuple[int, int, Decimal, 
     employees = list(db.scalars(select(Employee).join(Employee.user)))
     created = updated = 0
     total_net = Decimal("0.00")
-    currency = "USD"
+    currency = "INR"
 
     for employee in employees:
         structure = current_structure(db, employee.id, end)
