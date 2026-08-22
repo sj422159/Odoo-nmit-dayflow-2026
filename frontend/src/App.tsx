@@ -50,7 +50,6 @@ export default function App() {
             <Route path="/verify" element={<VerifyEmail />} />
 
             <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/attendance" element={<Attendance />} />
