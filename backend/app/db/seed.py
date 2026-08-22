@@ -44,13 +44,16 @@ LAST_NAMES = [
     "Farouk", "Osei", "Costa", "Bianchi", "Novak", "Keller",
 ]
 
-PASSWORD = "1234"
+PASSWORD = "Password@123"
 
 
 def wipe(db):
     for model in (Notification, Payslip, SalaryStructure, LeaveBalance, LeaveRequest,
                   AttendanceRecord, EmployeeDocument, Employee, User):
-        db.execute(delete(model))
+        try:
+            db.execute(delete(model))
+        except Exception:
+            pass
     db.commit()
     print("Cleared existing rows.")
 
@@ -87,7 +90,7 @@ def make_user(db, code, email, role, first, last, dept, title, joined):
 
 def make_corporate_user(db):
     user = User(
-        email="admin@gmail.com",
+        email="corp.admin@tecryst.com",
         hashed_password=hash_password(PASSWORD),
         role=Role.CORPORATE.value,
         is_verified=True,
@@ -210,7 +213,7 @@ def main(reset: bool, employee_count: int, history_days: int):
         joined = date.today() - timedelta(days=history_days + 60)
         corporate_user = make_corporate_user(db)
         admin_user, admin_employee = make_user(
-            db, "DF-1000", "hr@dayflow.co", Role.HR_ADMIN, "Amara", "Njoku",
+            db, "DF-1000", "hr.admin@tecryst.com", Role.HR_ADMIN, "Amara", "Njoku",
             "People Ops", "HR Officer", joined,
         )
         db.add(SalaryStructure(
@@ -234,7 +237,7 @@ def main(reset: bool, employee_count: int, history_days: int):
             dept = random.choice(list(DEPARTMENTS))
             title = random.choice(DEPARTMENTS[dept])
             code = f"DF-{1001 + index}"
-            email = f"{first.lower()}.{last.lower()}@dayflow.co"
+            email = "employee@tecryst.com" if index == 0 else f"{first.lower()}.{last.lower()}@dayflow.co"
             joined_on = date.today() - timedelta(days=random.randint(90, 1500))
             _, employee = make_user(db, code, email, Role.EMPLOYEE, first, last, dept, title, joined_on)
             employee.manager_id = admin_employee.id
@@ -280,9 +283,9 @@ def main(reset: bool, employee_count: int, history_days: int):
         db.commit()
 
         print("\nSeed complete.")
-        print(f"  Corporate: admin@gmail.com / {PASSWORD}")
-        print(f"  HR admin : hr@dayflow.co / {PASSWORD}")
-        print(f"  Employee : {employees[1].user.email} / {PASSWORD}")
+        print(f"  Corporate: corp.admin@tecryst.com / {PASSWORD}")
+        print(f"  HR admin : hr.admin@tecryst.com / {PASSWORD}")
+        print(f"  Employee : employee@tecryst.com / {PASSWORD}")
         print(f"  {len(employees)} people, {history_days} days of attendance history.")
     finally:
         db.close()
