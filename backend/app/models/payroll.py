@@ -20,7 +20,7 @@ class SalaryStructure(Base, TimestampMixin):
     employee_id: Mapped[int] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     basic: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     hra: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     allowances: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -51,7 +51,7 @@ class Payslip(Base, TimestampMixin):
     )
     period_year: Mapped[int] = mapped_column(Integer, nullable=False)
     period_month: Mapped[int] = mapped_column(Integer, nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     working_days: Mapped[int] = mapped_column(Integer, nullable=False)
     paid_days: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     lop_days: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)

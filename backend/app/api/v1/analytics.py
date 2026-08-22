@@ -79,7 +79,7 @@ def overview(db: Session = Depends(get_db), _: User = Depends(get_current_admin)
             Payslip.period_year == today.year, Payslip.period_month == today.month
         )
     ) or Decimal("0")
-    currency = db.scalar(select(Payslip.currency).limit(1)) or "USD"
+    currency = db.scalar(select(Payslip.currency).limit(1)) or "INR"
 
     return AdminOverview(
         total_employees=total_employees,

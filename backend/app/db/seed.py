@@ -216,7 +216,7 @@ def main(reset: bool, employee_count: int, history_days: int):
         db.add(SalaryStructure(
             employee_id=admin_employee.id, basic=Decimal("6200.00"), hra=Decimal("1400.00"),
             allowances=Decimal("600.00"), deductions=Decimal("820.00"),
-            effective_from=joined, currency="USD",
+            effective_from=joined, currency="INR",
         ))
         db.add(LeaveBalance(employee_id=admin_employee.id, year=date.today().year,
                             paid_total=settings.ANNUAL_PAID_LEAVE_DAYS,
@@ -245,7 +245,7 @@ def main(reset: bool, employee_count: int, history_days: int):
                 allowances=Decimal(random.randrange(200, 900, 50)),
                 deductions=(base * Decimal("0.11")).quantize(Decimal("0.01")),
                 effective_from=max(joined_on, date.today() - timedelta(days=365)),
-                currency="USD",
+                currency="INR",
             ))
             db.add(LeaveBalance(employee_id=employee.id, year=date.today().year,
                                 paid_total=settings.ANNUAL_PAID_LEAVE_DAYS,

@@ -48,7 +48,7 @@ export default function EmployeeDetail() {
           designation: data.designation,
           employment_type: data.employment_type,
           date_of_joining: data.date_of_joining,
-          role: data.role,
+          role: data.role === 'ADMIN' ? 'ADMIN' : 'EMPLOYEE',
           is_active: data.is_active,
           phone: data.phone ?? '',
           address: data.address ?? '',
@@ -73,7 +73,7 @@ export default function EmployeeDetail() {
           deductions: data.salary.deductions,
           effective_from: isoDate(new Date()),
         }
-      : { currency: 'USD', basic: '', hra: '0', allowances: '0', deductions: '0', effective_from: isoDate(new Date()) },
+      : { currency: 'INR', basic: '', hra: '0', allowances: '0', deductions: '0', effective_from: isoDate(new Date()) },
   })
 
   const onSubmit = async (values: AdminEmployeeValues) => {
@@ -234,7 +234,7 @@ export default function EmployeeDetail() {
               )}
 
               <Field label="Currency" htmlFor="currency" error={salaryErrors.currency?.message} required>
-                <Input id="currency" maxLength={3} invalid={!!salaryErrors.currency} {...registerSalary('currency')} />
+                <Input id="currency" readOnly aria-describedby="currency-hint" {...registerSalary('currency')} />
               </Field>
               <Field label="Basic" htmlFor="basic" error={salaryErrors.basic?.message} required>
                 <Input id="basic" invalid={!!salaryErrors.basic} {...registerSalary('basic')} />
