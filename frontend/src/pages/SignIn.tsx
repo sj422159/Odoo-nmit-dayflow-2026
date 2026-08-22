@@ -176,7 +176,7 @@ export default function SignIn() {
           <FormBanner message={banner} />
 
           <Field
-            label={accessType === 'EXTERNAL' ? 'Corporate email' : 'Work email'}
+            label={accessType === 'EXTERNAL' ? 'Email' : 'Work email'}
             htmlFor="email"
             error={errors.email?.message}
             required
