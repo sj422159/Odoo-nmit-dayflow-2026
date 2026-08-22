@@ -1,6 +1,3 @@
-import React from 'react';
-import { Icon } from '@iconify/react';
-
 interface PillarCard {
   eyebrow: string;
   title: string;
@@ -34,21 +31,7 @@ const pillarCards: PillarCard[] = [
   },
 ];
 
-interface Certification {
-  icon: string;
-  label: string;
-}
-
-const certifications: Certification[] = [
-  { icon: 'mdi:shield-account', label: 'Role-Based Access Control' },
-  { icon: 'mdi:lock', label: 'ISO 27001 Certified' },
-  { icon: 'mdi:shield-check', label: 'AICPA SOC 2 Type II' },
-  { icon: 'mdi:file-certificate-outline', label: 'GDPR & Privacy Aligned' },
-  { icon: 'mdi:flash', label: '99.98% SLA Uptime' },
-  { icon: 'mdi:bank', label: '256-Bit SSL Encryption' },
-];
-
-const WhyZimyo: React.FC = () => {
+export default function WhyZimyo() {
   return (
     <section className="bg-bg-alt py-20 md:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -86,23 +69,7 @@ const WhyZimyo: React.FC = () => {
             </div>
           ))}
         </div>
-
-        {/* Security & Governance Banner */}
-        <div className="mt-12 rounded-2xl bg-zim-navy-dark p-6 sm:p-8 shadow-xl">
-          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8">
-            {certifications.map((cert) => (
-              <div key={cert.label} className="flex items-center gap-3">
-                <div className="rounded-xl bg-zim-primary/20 p-2 text-zim-primary">
-                  <Icon icon={cert.icon} className="h-5 w-5" />
-                </div>
-                <span className="text-sm font-semibold text-white">{cert.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );
-};
-
-export default WhyZimyo;
+}
