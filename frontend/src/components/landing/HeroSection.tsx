@@ -368,16 +368,16 @@ function InteractiveDashboardMockup() {
       </div>
 
       {/* Floating Badges */}
-      <div className="absolute -left-6 top-8 z-10 animate-float rounded-xl border border-white/20 bg-zim-navy-dark px-3.5 py-2.5 shadow-xl hidden sm:block">
+      <div className="absolute -left-6 top-8 z-10 animate-float rounded-xl border border-zim-primary/30 bg-zim-primary px-3.5 py-2.5 shadow-xl hidden sm:block">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zim-primary/20 text-zim-primary">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/70 text-slate-900">
             <Icon icon="mdi:shield-check" className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-[10px] font-semibold text-white">
+            <p className="text-[10px] font-semibold text-slate-900">
               Role-Based Access Control
             </p>
-            <p className="text-[9px] text-white/60">
+            <p className="text-[9px] text-slate-900/75">
               Admin &amp; Employee Views
             </p>
           </div>
@@ -425,7 +425,7 @@ export default function HeroSection({ onOpenDemo }: HeroSectionProps) {
             {/* H1 Title */}
             <h1 className="mb-5 font-heading text-4xl font-bold leading-tight tracking-tight text-slate-900 sm:text-5xl lg:text-[3.25rem] lg:leading-[1.15]">
               Human Resource Management System Built for{" "}
-              <em className="not-italic bg-gradient-to-r from-zim-primary via-zim-purple to-[#0FB88A] bg-clip-text text-transparent">
+              <em className="not-italic text-slate-900">
                 Admins &amp; Employees
               </em>
             </h1>
@@ -453,7 +453,7 @@ export default function HeroSection({ onOpenDemo }: HeroSectionProps) {
               />
               <button
                 type="submit"
-                className="group inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zim-primary px-6 text-sm font-bold text-white shadow-lg shadow-zim-primary/25 transition-all hover:bg-zim-primary-hover hover:shadow-xl hover:shadow-zim-primary/30 active:scale-[0.98] cursor-pointer"
+                className="group inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-zim-primary px-6 text-sm font-bold text-slate-900 shadow-lg shadow-zim-primary/25 transition-all hover:bg-zim-primary-hover hover:shadow-xl hover:shadow-zim-primary/30 active:scale-[0.98] cursor-pointer"
               >
                 Schedule Demo
                 <Icon
