@@ -7,7 +7,9 @@ import type { AdminOverview, LeaveList, LivePresence } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
-import { Button, Card, CardHeader, EmptyState, ErrorState, Pill, Skeleton } from '@/components/ui/Primitives'
+import { StatCard } from '@/components/StatCard'
+import { Button, Card, CardHeader, EmptyState, ErrorState, Skeleton } from '@/components/ui/Primitives'
+import { fmtDate, fmtMoney, fmtTime, LEAVE_TYPE_LABEL, initials, titleCase } from '@/lib/format'
 
 export default function AdminHome() {
   const load = useCallback(
