@@ -172,7 +172,7 @@ export default function SignIn() {
         {/* ======================================================== */}
         {/* 3. SIGN IN FORM                                          */}
         {/* ======================================================== */}
-        <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <form noValidate autoComplete="off" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <FormBanner message={banner} />
 
           <Field
@@ -184,7 +184,7 @@ export default function SignIn() {
             <Input
               id="email"
               type="email"
-              autoComplete="email"
+              autoComplete="off"
               invalid={!!errors.email}
               {...register('email')}
             />
@@ -194,7 +194,7 @@ export default function SignIn() {
             <Input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               invalid={!!errors.password}
               {...register('password')}
             />
