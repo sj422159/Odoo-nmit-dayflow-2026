@@ -68,7 +68,7 @@ export default function ROICalculator({ onOpenDemo }: ROICalculatorProps) {
                     step={10}
                     value={employeeCount}
                     onChange={(e) => setEmployeeCount(Number(e.target.value))}
-                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-teal bg-gray-200
+                    className="roi-slider w-full h-2 rounded-full appearance-none cursor-pointer accent-zim-teal bg-gray-200
                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
                       [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zim-teal
                       [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer
