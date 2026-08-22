@@ -119,12 +119,5 @@ class AdminCreateRequest(BaseModel):
 
 
 class EmployeeApprovalRequest(BaseModel):
-    employee_code: str = Field(..., min_length=4, max_length=24, examples=["DF-1042"])
-
-    @field_validator("employee_code")
-    @classmethod
-    def _approval_code_format(cls, v: str) -> str:
-        v = v.strip().upper()
-        if not EMPLOYEE_CODE_RE.match(v):
-            raise ValueError("Employee ID looks like DF-1042: 2-4 letters, a dash, then 3-6 digits.")
-        return v
+    assignment_scope: str = Field(..., pattern="^(overall|department)$")
+    department_id: Optional[int] = Field(default=None, ge=1)

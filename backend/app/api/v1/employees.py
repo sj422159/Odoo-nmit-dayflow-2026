@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin, get_current_employee, get_current_user
 from app.db.session import get_db
 from app.models.attendance import AttendanceRecord
+from app.models.department import Department
 from app.models.employee import Employee
 from app.models.enums import Role
 from app.models.user import User
@@ -20,10 +21,12 @@ from app.schemas.employee import (
     EmployeeSummary,
     PaginatedEmployees,
     SalaryStructureOut,
+    DepartmentCreate,
+    DepartmentOut,
 )
 from app.services.payroll_service import current_structure
 from app.services.realtime import bus
-from app.schemas.auth import EmployeeApprovalRequest
+from app.schemas.auth import EMPLOYEE_CODE_RE, EmployeeApprovalRequest
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
@@ -164,9 +167,24 @@ def list_pending_access(
     )
 
 
-@router.get("/departments", response_model=list[str])
+@router.get("/departments", response_model=list[DepartmentOut])
 def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return [row[0] for row in db.execute(select(Employee.department).distinct().order_by(Employee.department)).all()]
+    return list(db.scalars(select(Department).where(Department.is_active.is_(True)).order_by(Department.name)))
+
+
+@router.post("/departments", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)
+def create_department(
+    payload: DepartmentCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    if db.scalar(select(Department).where(or_(Department.name == payload.name, Department.code == payload.code))):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That department name or code already exists.")
+    department = Department(name=payload.name, code=payload.code)
+    db.add(department)
+    db.commit()
+    db.refresh(department)
+    return department
 
 
 @router.get("/{employee_id}", response_model=EmployeeDetail)
@@ -191,15 +209,31 @@ def approve_employee(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
     if employee.user.approval_status == "APPROVED":
         raise HTTPException(status.HTTP_409_CONFLICT, "This employee already has access.")
-    if db.scalar(select(User).where(User.employee_code == payload.employee_code)):
-        raise HTTPException(status.HTTP_409_CONFLICT, "That employee ID is already taken.")
-    employee.user.employee_code = payload.employee_code
+    if payload.assignment_scope == "department":
+        if payload.department_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose a department for this employee.")
+        department = db.get(Department, payload.department_id)
+        if department is None or not department.is_active:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "That department does not exist.")
+        employee.department_id = department.id
+        employee.department = department.name
+        employee_code = f"{department.code}-{department.next_employee_number:04d}"
+        department.next_employee_number += 1
+    else:
+        employee_code = _next_overall_code(db)
+    employee.user.employee_code = employee_code
     employee.user.approval_status = "APPROVED"
     employee.user.is_active = True
     db.commit()
     db.refresh(employee)
     bus.publish("employee.access_approved", {"employee_id": employee.id}, to_user_ids=[employee.user_id])
     return _detail(db, employee, include_salary=True)
+
+
+def _next_overall_code(db: Session) -> str:
+    codes = db.scalars(select(User.employee_code).where(User.employee_code.is_not(None))).all()
+    numbers = [int(code.split("-")[-1]) for code in codes if code and EMPLOYEE_CODE_RE.match(code)]
+    return f"DF-{max(numbers, default=0) + 1:04d}"
 
 
 @router.patch("/{employee_id}", response_model=EmployeeDetail)
