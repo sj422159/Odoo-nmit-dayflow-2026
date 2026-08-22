@@ -1,4 +1,6 @@
-export type Role = 'ADMIN' | 'EMPLOYEE'
+export type Role = 'CORP_ADMIN' | 'HR' | 'EMPLOYEE'
+export type AccountType = 'corp_admin' | 'hr' | 'employee'
+export type DocumentType = 'PAN_CARD' | 'BANK_DETAILS' | 'ADDRESS_PROOF' | 'EXPERIENCE_LETTER' | 'AADHAAR_CARD'
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'
 export type LeaveType = 'PAID' | 'SICK' | 'UNPAID'
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
@@ -13,9 +15,10 @@ export interface TokenPair {
 
 export interface SessionUser {
   id: number
-  employee_code: string
+  code: string
   email: string
   role: Role
+  account_type: AccountType
   is_verified: boolean
   is_active: boolean
   last_login_at: string | null
@@ -42,6 +45,14 @@ export interface SalaryStructure {
   net_monthly: string
 }
 
+export interface EmployeeDocument {
+  id: number
+  document_type: DocumentType
+  file_path: string
+  original_filename: string
+  uploaded_at: string
+}
+
 export interface EmployeeSummary {
   id: number
   employee_code: string
@@ -65,7 +76,7 @@ export interface EmployeeDetail extends EmployeeSummary {
   manager_name: string | null
   is_verified: boolean
   salary: SalaryStructure | null
-  documents: { id: number; title: string; category: string; file_url: string }[]
+  documents: EmployeeDocument[]
 }
 
 export interface Paginated<T> {

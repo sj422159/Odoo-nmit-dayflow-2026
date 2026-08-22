@@ -142,7 +142,7 @@ export default function EmployeeDetail() {
           <p className="font-bold text-ink">{data.full_name}</p>
           <p className="text-sm text-away">{data.email}</p>
           <div className="flex gap-2">
-            <Pill tone={data.role === 'ADMIN' ? 'bg-flow-50 text-flow-600' : 'bg-slate-150 text-ink-600'}>
+            <Pill tone={data.role === 'CORP_ADMIN' ? 'bg-flow-50 text-flow-600' : 'bg-slate-150 text-ink-600'}>
               {titleCase(data.role)}
             </Pill>
             <Pill tone={data.is_active ? 'bg-present-soft text-present' : 'bg-absent-soft text-absent'}>
@@ -192,7 +192,8 @@ export default function EmployeeDetail() {
               <Field label="Role" htmlFor="role" error={errors.role?.message} required>
                 <Select id="role" invalid={!!errors.role} {...register('role')}>
                   <option value="EMPLOYEE">Employee</option>
-                  <option value="ADMIN">Admin</option>
+                  <option value="HR">HR Officer</option>
+                  <option value="CORP_ADMIN">Corp Admin</option>
                 </Select>
               </Field>
               <Field label="Status" htmlFor="is_active" error={errors.is_active?.message} required>

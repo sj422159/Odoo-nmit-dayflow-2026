@@ -70,13 +70,14 @@ async function toError(res: Response): Promise<ApiError> {
 interface RequestOptions {
   method?: string
   body?: unknown
+  formData?: FormData
   query?: Record<string, string | number | boolean | undefined | null>
   auth?: boolean
   retry?: boolean
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, query, auth = true, retry = true } = options
+  const { method = 'GET', body, formData, query, auth = true, retry = true } = options
 
   const url = new URL(`${BASE}${path}`, window.location.origin)
   if (query) {
@@ -99,7 +100,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     res = await fetch(url.toString().replace(window.location.origin, ''), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: formData ? formData : body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, 'Cannot reach the server. Check that the API is running.')
@@ -121,6 +122,8 @@ export const api = {
   get: <T,>(path: string, query?: RequestOptions['query']) => request<T>(path, { query }),
   post: <T,>(path: string, body?: unknown, query?: RequestOptions['query']) =>
     request<T>(path, { method: 'POST', body, query }),
+  upload: <T,>(path: string, formData: FormData) =>
+    request<T>(path, { method: 'POST', formData }),
   put: <T,>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   patch: <T,>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T,>(path: string) => request<T>(path, { method: 'DELETE' }),

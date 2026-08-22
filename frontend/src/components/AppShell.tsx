@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ShieldCheck,
   Users,
   UserRound,
   Wallet,
@@ -35,7 +36,7 @@ const EMPLOYEE_NAV: NavItem[] = [
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
-const ADMIN_NAV: NavItem[] = [
+const HR_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/employees', label: 'People', icon: Users },
   { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
@@ -45,14 +46,24 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
+const CORP_ADMIN_NAV: NavItem[] = [
+  { to: '/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/admin/employees', label: 'All Employees', icon: Users },
+  { to: '/admin/attendance', label: 'Attendance Logs', icon: CalendarCheck },
+  { to: '/admin/leave', label: 'Leave Overviews', icon: CalendarDays, badge: 'pending' },
+  { to: '/admin/payroll', label: 'Payroll Approvals', icon: Wallet },
+  { to: '/admin/insights', label: 'Executive Analytics', icon: BarChart3 },
+  { to: '/profile', label: 'My Account', icon: ShieldCheck },
+]
+
 export function AppShell() {
-  const { session, isAdmin, signOut } = useAuth()
+  const { session, isCorpAdmin, isHR, signOut } = useAuth()
   const { snapshot } = useRealtime()
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
-  const items = isAdmin ? ADMIN_NAV : EMPLOYEE_NAV
+  const items = isCorpAdmin ? CORP_ADMIN_NAV : isHR ? HR_NAV : EMPLOYEE_NAV
   const pending = snapshot.pending_leave_requests ?? 0
 
   useEffect(() => setMenuOpen(false), [location.pathname])
@@ -68,6 +79,8 @@ export function AppShell() {
     signOut()
     navigate('/signin', { replace: true })
   }
+
+  const roleLabel = isCorpAdmin ? 'Corp Admin' : isHR ? 'HR Officer' : session?.designation || 'Employee'
 
   const link = (item: NavItem, compact = false) => {
     const Icon = item.icon
@@ -105,7 +118,7 @@ export function AppShell() {
       </span>
       <span className="leading-tight">
         <span className="block text-sm font-bold tracking-tight text-white">Dayflow</span>
-        <span className="block text-[11px] text-white/50">Every workday, aligned</span>
+        <span className="block text-[11px] text-white/50">{roleLabel}</span>
       </span>
     </div>
   )
@@ -125,9 +138,7 @@ export function AppShell() {
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-sm font-semibold text-white">{session?.full_name}</span>
-              <span className="block truncate text-[11px] text-white/50">
-                {isAdmin ? 'HR administrator' : session?.designation}
-              </span>
+              <span className="block truncate text-[11px] text-white/50">{roleLabel}</span>
             </span>
           </div>
           <button
@@ -200,7 +211,7 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        {/* Mobile tab bar — the five destinations people actually use daily */}
+        {/* Mobile tab bar */}
         <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-150 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
           {items.slice(0, 5).map((item) => {
             const Icon = item.icon

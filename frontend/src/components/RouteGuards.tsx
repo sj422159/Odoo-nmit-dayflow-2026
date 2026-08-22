@@ -23,11 +23,35 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+export function RequireCorpAdmin({ children }: { children: ReactNode }) {
+  const { session, loading, isCorpAdmin } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/signin" replace />
+  if (!isCorpAdmin) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
+export function RequireHR({ children }: { children: ReactNode }) {
+  const { session, loading, isHR } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/signin" replace />
+  if (!isHR) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { session, loading, isAdmin } = useAuth()
   if (loading) return <Splash />
   if (!session) return <Navigate to="/signin" replace />
   if (!isAdmin) return <Navigate to="/dashboard" replace />
+  return <>{children}</>
+}
+
+export function RequireEmployee({ children }: { children: ReactNode }) {
+  const { session, loading, isEmployee } = useAuth()
+  if (loading) return <Splash />
+  if (!session) return <Navigate to="/signin" replace />
+  if (!isEmployee) return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 

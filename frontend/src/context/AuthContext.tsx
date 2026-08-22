@@ -8,13 +8,16 @@ import {
   type ReactNode,
 } from 'react'
 import { api, tokens } from '@/api/client'
-import type { Session, TokenPair } from '@/api/types'
+import type { AccountType, Session, TokenPair } from '@/api/types'
 
 interface AuthValue {
   session: Session | null
   loading: boolean
   isAdmin: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  isCorpAdmin: boolean
+  isHR: boolean
+  isEmployee: boolean
+  signIn: (email: string, password: string, accountType?: AccountType) => Promise<void>
   signOut: () => void
   refreshSession: () => Promise<void>
 }
@@ -49,8 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadSession])
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
-      const pair = await api.public.post<TokenPair>('/auth/login', { email, password })
+    async (email: string, password: string, accountType?: AccountType) => {
+      let endpoint = '/auth/login'
+      if (accountType === 'corp_admin') endpoint = '/auth/corp-admin/login'
+      else if (accountType === 'hr') endpoint = '/auth/hr/login'
+      else if (accountType === 'employee') endpoint = '/auth/employee/login'
+
+      const pair = await api.public.post<TokenPair>(endpoint, { email, password, account_type: accountType })
       tokens.save(pair)
       setSession(await api.get<Session>('/auth/me'))
     },
@@ -62,16 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null)
   }, [])
 
+  const isCorpAdmin = session?.user.role === 'CORP_ADMIN' || session?.user.account_type === 'corp_admin'
+  const isHR = session?.user.role === 'HR' || session?.user.account_type === 'hr'
+  const isEmployee = session?.user.role === 'EMPLOYEE' || session?.user.account_type === 'employee'
+  const isAdmin = isCorpAdmin || isHR
+
   const value = useMemo<AuthValue>(
     () => ({
       session,
       loading,
-      isAdmin: session?.user.role === 'ADMIN',
+      isAdmin,
+      isCorpAdmin,
+      isHR,
+      isEmployee,
       signIn,
       signOut,
       refreshSession: loadSession,
     }),
-    [session, loading, signIn, signOut, loadSession],
+    [session, loading, isAdmin, isCorpAdmin, isHR, isEmployee, signIn, signOut, loadSession],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

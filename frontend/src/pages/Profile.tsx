@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Briefcase, Mail, Save, ShieldCheck, UserRound } from 'lucide-react'
+import { Briefcase, Download, FileCheck, FilePlus, Mail, Save, ShieldCheck, Trash2, UserRound } from 'lucide-react'
 import { ApiError, api } from '@/api/client'
-import type { EmployeeDetail } from '@/api/types'
+import type { DocumentType, EmployeeDetail, EmployeeDocument } from '@/api/types'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -16,13 +16,25 @@ import {
   Input,
   Pill,
   Skeleton,
-} from '@/components/ui/Primitives'
+}
+
+  from '@/components/ui/Primitives'
 import { profileSchema, type ProfileValues } from '@/lib/validation'
 import { fmtDate, fmtMoney, initials, titleCase } from '@/lib/format'
+
+const DOCUMENT_SLOTS: { type: DocumentType; label: string; description: string }[] = [
+  { type: 'PAN_CARD', label: 'PAN Card', description: 'Tax identification card issued by income tax department.' },
+  { type: 'BANK_DETAILS', label: 'Bank Passbook / Cheque', description: 'Primary bank account document for salary transfers.' },
+  { type: 'ADDRESS_PROOF', label: 'Address Proof', description: 'Recent utility bill, passport, or rent agreement.' },
+  { type: 'EXPERIENCE_LETTER', label: 'Experience Letter', description: 'Relieving or experience letter from previous employer.' },
+  { type: 'AADHAAR_CARD', label: 'Aadhaar Card', description: 'Government issued national identity card.' },
+]
 
 export default function Profile() {
   const [banner, setBanner] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
+  const [uploadingType, setUploadingType] = useState<DocumentType | null>(null)
+  const [docMessage, setDocMessage] = useState<string | null>(null)
 
   const load = useCallback(() => api.get<EmployeeDetail>('/employees/me'), [])
   const { data, loading, error, reload, setData } = useAsync(load, [])
@@ -66,6 +78,37 @@ export default function Profile() {
     }
   }
 
+  const handleFileUpload = async (documentType: DocumentType, file: File) => {
+    setUploadingType(documentType)
+    setDocMessage(null)
+    try {
+      const form = new FormData()
+      form.append('document_type', documentType)
+      form.append('file', file)
+
+      await api.upload('/employees/me/documents', form)
+      const refreshed = await api.get<EmployeeDetail>('/employees/me')
+      setData(refreshed)
+      setDocMessage(`${titleCase(documentType)} uploaded successfully.`)
+    } catch {
+      setDocMessage('Failed to upload document.')
+    } finally {
+      setUploadingType(null)
+    }
+  }
+
+  const handleFileDelete = async (documentType: DocumentType) => {
+    setDocMessage(null)
+    try {
+      await api.delete(`/employees/me/documents/${documentType}`)
+      const refreshed = await api.get<EmployeeDetail>('/employees/me')
+      setData(refreshed)
+      setDocMessage(`${titleCase(documentType)} removed.`)
+    } catch {
+      setDocMessage('Failed to delete document.')
+    }
+  }
+
   if (loading && !data) {
     return (
       <div className="grid gap-4">
@@ -77,9 +120,14 @@ export default function Profile() {
   }
   if (error || !data) return <ErrorState message={error ?? 'No data came back.'} onRetry={reload} />
 
+  const docMap: Record<string, EmployeeDocument> = {}
+  data.documents.forEach((doc) => {
+    docMap[doc.document_type] = doc
+  })
+
   return (
     <>
-      <PageHeader title="Your profile" description="Contact details HR and your team can see." />
+      <PageHeader title="Your profile" description="Contact details and compliance identity documents." />
 
       <div className="grid gap-5 lg:grid-cols-[20rem_1fr] lg:items-start">
         <Card className="flex flex-col items-center gap-3 p-6 text-center">
@@ -98,7 +146,7 @@ export default function Profile() {
             <p className="font-bold text-ink">{data.full_name}</p>
             <p className="text-sm text-away">{data.employee_code}</p>
           </div>
-          <Pill tone={data.role === 'ADMIN' ? 'bg-flow-50 text-flow-600' : 'bg-slate-150 text-ink-600'}>
+          <Pill tone={data.role === 'CORP_ADMIN' ? 'bg-flow-50 text-flow-600' : 'bg-slate-150 text-ink-600'}>
             {titleCase(data.role)}
           </Pill>
 
@@ -122,7 +170,7 @@ export default function Profile() {
 
         <div className="flex flex-col gap-5">
           <Card>
-            <CardHeader title="Editable details" subtitle="Phone, address and picture — everything else is set by HR." />
+            <CardHeader title="Editable details" subtitle="Phone, address and avatar URL." />
             <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 p-5">
               <FormBanner message={banner} />
               {ok && (
@@ -147,6 +195,87 @@ export default function Profile() {
                 Save changes
               </Button>
             </form>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Identity & Compliance Documents"
+              subtitle="5 mandatory slot architecture with unique document constraints."
+            />
+            <div className="flex flex-col gap-3 p-5">
+              {docMessage && (
+                <p className="rounded-xl bg-flow-50 px-3.5 py-2.5 text-sm font-semibold text-flow-600">
+                  {docMessage}
+                </p>
+              )}
+              {DOCUMENT_SLOTS.map((slot) => {
+                const doc = docMap[slot.type]
+                const isUploading = uploadingType === slot.type
+                return (
+                  <div
+                    key={slot.type}
+                    className="flex flex-col gap-3 rounded-2xl border border-slate-150 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${doc ? 'bg-present-soft text-present' : 'bg-slate-100 text-away'}`}>
+                        {doc ? <FileCheck className="h-5 w-5" /> : <FilePlus className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-ink">{slot.label}</p>
+                          <Pill tone={doc ? 'bg-present-soft text-present' : 'bg-slate-150 text-away'}>
+                            {doc ? 'Uploaded' : 'Missing'}
+                          </Pill>
+                        </div>
+                        <p className="text-xs text-away">{slot.description}</p>
+                        {doc && (
+                          <p className="mt-1 text-xs text-ink-600 font-mono">
+                            {doc.original_filename} · {fmtDate(doc.uploaded_at, 'd MMM yyyy')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) void handleFileUpload(slot.type, file)
+                          }}
+                        />
+                        <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-ink-600 shadow-sm hover:bg-slate-50 transition">
+                          {isUploading ? 'Uploading...' : doc ? 'Replace' : 'Upload'}
+                        </span>
+                      </label>
+
+                      {doc && (
+                        <>
+                          <a
+                            href={`http://localhost:8000/api/v1/employees/me/documents/${slot.type}/download`}
+                            download
+                            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 p-1.5 text-xs text-ink-600 hover:bg-slate-50 transition"
+                            title="Download document"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleFileDelete(slot.type)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-rose-200 p-1.5 text-xs text-rose-600 hover:bg-rose-50 transition"
+                            title="Delete document"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </Card>
 
           {data.salary && (

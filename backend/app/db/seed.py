@@ -20,6 +20,7 @@ from app.models.hr_officer import HROfficer
 from app.models.leave import LeaveBalance, LeaveRequest
 from app.models.notification import Notification
 from app.models.payroll import Payslip, SalaryStructure
+from app.services.payroll_service import run_payroll
 
 random.seed(11)
 
@@ -46,9 +47,14 @@ PASSWORD = "Dayflow#2026"
 
 
 def wipe(db):
+    from app.db.base import Base
+    Base.metadata.create_all(bind=db.get_bind())
     for model in (Notification, Payslip, SalaryStructure, LeaveBalance, LeaveRequest,
                   AttendanceRecord, EmployeeDocument, Employee, HROfficer, CorpAdmin):
-        db.execute(delete(model))
+        try:
+            db.execute(delete(model))
+        except Exception:
+            pass
     db.commit()
     print("Cleared existing rows.")
 
@@ -142,6 +148,8 @@ def seed_leaves(db, employee: Employee, hr_id: int):
 def main(reset: bool, employee_count: int, history_days: int):
     db = SessionLocal()
     try:
+        from app.db.base import Base
+        Base.metadata.create_all(bind=db.get_bind())
         if reset:
             wipe(db)
         if db.scalar(select(CorpAdmin).limit(1)):
