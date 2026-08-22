@@ -71,3 +71,33 @@ export const initials = (name: string) =>
     .join('')
 
 export const isoDate = (date: Date) => format(date, 'yyyy-MM-dd')
+
+export function numberToWords(num: number | string): string {
+  const n = typeof num === 'string' ? Number(num) : num
+  if (Number.isNaN(n) || n === 0) return 'Zero'
+
+  const a = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
+  ]
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+  function inWords(val: number): string {
+    if (val < 20) return a[val]
+    if (val < 100) return b[Math.floor(val / 10)] + (val % 10 ? ' ' + a[val % 10] : '')
+    if (val < 1000) return a[Math.floor(val / 100)] + ' Hundred' + (val % 100 ? ' ' + inWords(val % 100) : '')
+    if (val < 100000) return inWords(Math.floor(val / 1000)) + ' Thousand' + (val % 1000 ? ' ' + inWords(val % 1000) : '')
+    if (val < 10000000) return inWords(Math.floor(val / 100000)) + ' Lakh' + (val % 100000 ? ' ' + inWords(val % 100000) : '')
+    return inWords(Math.floor(val / 10000000)) + ' Crore' + (val % 10000000 ? ' ' + inWords(val % 10000000) : '')
+  }
+
+  const integerPart = Math.floor(n)
+  const decimalPart = Math.round((n - integerPart) * 100)
+
+  let result = inWords(integerPart)
+  if (decimalPart > 0) {
+    result += ' and ' + inWords(decimalPart) + ' Cents'
+  }
+  return result + ' Only'
+}
+

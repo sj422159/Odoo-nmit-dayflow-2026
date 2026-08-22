@@ -1,18 +1,22 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { FileText, Wallet } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { api } from '@/api/client'
-import type { MyPayroll } from '@/api/types'
+import type { MyPayroll, Payslip } from '@/api/types'
 import { useLiveRefresh } from '@/context/RealtimeContext'
 import { useAsync } from '@/hooks/useAsync'
 import { PageHeader } from '@/components/PageHeader'
 import { StatCard } from '@/components/StatCard'
-import { Card, CardHeader, EmptyState, ErrorState, Skeleton } from '@/components/ui/Primitives'
+import { Button, Card, CardHeader, EmptyState, ErrorState, Skeleton } from '@/components/ui/Primitives'
+import { CorporatePayslipModal } from '@/components/CorporatePayslipModal'
 import { fmtMoney, monthName } from '@/lib/format'
 
 export default function Payroll() {
   const load = useCallback(() => api.get<MyPayroll>('/payroll/me'), [])
   const { data, loading, error, reload } = useAsync(load, [])
   useLiveRefresh(['payroll.structure_updated', 'payroll.run_completed'], reload)
+
+  const [selectedSlip, setSelectedSlip] = useState<Payslip | null>(null)
 
   if (loading && !data) {
     return (
@@ -85,30 +89,47 @@ export default function Payroll() {
         ) : (
           <ul className="divide-y divide-slate-150">
             {payslips.map((slip) => (
-              <li key={slip.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <li key={slip.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 hover:bg-slate-50/60 transition-colors">
                 <div className="min-w-0">
                   <p className="font-semibold text-ink">
                     {monthName(slip.period_month)} {slip.period_year}
                   </p>
-                  <p className="mt-0.5 text-sm text-away tabular">
+                  <p className="mt-0.5 text-xs text-away tabular">
                     {slip.paid_days} paid days · {slip.lop_days} unpaid
                   </p>
                 </div>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4 sm:gap-6">
                   <div className="text-right">
-                    <p className="text-sm text-away">Gross</p>
-                    <p className="font-semibold text-ink tabular">{fmtMoney(slip.gross, slip.currency)}</p>
+                    <p className="text-xs text-away">Gross</p>
+                    <p className="font-semibold text-ink text-xs tabular">{fmtMoney(slip.gross, slip.currency)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-away">Net pay</p>
-                    <p className="font-bold text-present tabular">{fmtMoney(slip.net_pay, slip.currency)}</p>
+                    <p className="text-xs text-away">Net pay</p>
+                    <p className="font-bold text-emerald-700 text-sm tabular">{fmtMoney(slip.net_pay, slip.currency)}</p>
                   </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedSlip(slip)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold"
+                  >
+                    <Icon icon="mdi:file-download-outline" className="h-4 w-4 text-flow-600" />
+                    <span>View Payslip</span>
+                  </Button>
                 </div>
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      {/* Official Corporate Payslip Modal */}
+      {selectedSlip && (
+        <CorporatePayslipModal
+          slip={selectedSlip}
+          onClose={() => setSelectedSlip(null)}
+        />
+      )}
     </>
   )
 }
