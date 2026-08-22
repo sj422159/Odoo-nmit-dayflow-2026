@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: 'cv02', 'cv03', 'cv04';
+  }
+  body {
+    @apply bg-paper text-ink antialiased;
+  }
+  /* Times, money and IDs align in columns everywhere they appear. */
+  .tabular {
+    @apply font-mono tabular-nums;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-flow-500 ring-offset-2 ring-offset-white rounded;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

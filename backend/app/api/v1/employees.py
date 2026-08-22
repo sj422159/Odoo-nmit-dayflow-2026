@@ -1,0 +1,205 @@
+from datetime import date
+from math import ceil
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_admin, get_current_employee, get_current_user
+from app.db.session import get_db
+from app.models.attendance import AttendanceRecord
+from app.models.employee import Employee
+from app.models.enums import Role
+from app.models.user import User
+from app.schemas.employee import (
+    DocumentOut,
+    EmployeeAdminUpdate,
+    EmployeeDetail,
+    EmployeeSelfUpdate,
+    EmployeeSummary,
+    PaginatedEmployees,
+    SalaryStructureOut,
+)
+from app.services.payroll_service import current_structure
+from app.services.realtime import bus
+
+router = APIRouter(prefix="/employees", tags=["Employees"])
+
+
+def _summary(employee: Employee, today_status: Optional[str] = None) -> EmployeeSummary:
+    return EmployeeSummary(
+        id=employee.id,
+        employee_code=employee.user.employee_code,
+        full_name=employee.full_name,
+        email=employee.user.email,
+        department=employee.department,
+        designation=employee.designation,
+        employment_type=employee.employment_type,
+        role=employee.user.role,
+        is_active=employee.user.is_active,
+        avatar_url=employee.avatar_url,
+        today_status=today_status,
+    )
+
+
+def _detail(db: Session, employee: Employee, include_salary: bool) -> EmployeeDetail:
+    salary = current_structure(db, employee.id) if include_salary else None
+    manager = db.get(Employee, employee.manager_id) if employee.manager_id else None
+    return EmployeeDetail(
+        **_summary(employee).model_dump(),
+        first_name=employee.first_name,
+        last_name=employee.last_name,
+        phone=employee.phone,
+        address=employee.address,
+        date_of_joining=employee.date_of_joining,
+        manager_name=manager.full_name if manager else None,
+        is_verified=employee.user.is_verified,
+        salary=SalaryStructureOut.model_validate(salary) if salary else None,
+        documents=[DocumentOut.model_validate(d) for d in employee.documents],
+    )
+
+
+@router.get("/me", response_model=EmployeeDetail)
+def read_my_profile(employee: Employee = Depends(get_current_employee), db: Session = Depends(get_db)):
+    return _detail(db, employee, include_salary=True)
+
+
+@router.patch("/me", response_model=EmployeeDetail)
+def update_my_profile(
+    payload: EmployeeSelfUpdate,
+    employee: Employee = Depends(get_current_employee),
+    db: Session = Depends(get_db),
+):
+    """Employees may change contact details and their picture only."""
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to save — change a field first.")
+    for field, value in data.items():
+        setattr(employee, field, value)
+    db.commit()
+    db.refresh(employee)
+    bus.publish(
+        "employee.updated",
+        {"employee_id": employee.id, "full_name": employee.full_name, "by": "self"},
+        to_user_ids=[employee.user_id],
+    )
+    return _detail(db, employee, include_salary=True)
+
+
+@router.get("", response_model=PaginatedEmployees)
+def list_employees(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+    search: Optional[str] = Query(None, max_length=80, description="Name, email or employee ID"),
+    department: Optional[str] = Query(None, max_length=80),
+    is_active: Optional[bool] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    stmt = select(Employee).join(Employee.user)
+    if search:
+        term = f"%{search.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Employee.first_name).like(term),
+                func.lower(Employee.last_name).like(term),
+                func.lower(User.email).like(term),
+                func.lower(User.employee_code).like(term),
+            )
+        )
+    if department:
+        stmt = stmt.where(Employee.department == department)
+    if is_active is not None:
+        stmt = stmt.where(User.is_active == is_active)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = list(
+        db.scalars(
+            stmt.order_by(Employee.first_name, Employee.last_name)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    )
+
+    today = date.today()
+    statuses = {
+        eid: status_value
+        for eid, status_value in db.execute(
+            select(AttendanceRecord.employee_id, AttendanceRecord.status).where(
+                AttendanceRecord.work_date == today,
+                AttendanceRecord.employee_id.in_([e.id for e in rows] or [0]),
+            )
+        ).all()
+    }
+
+    return PaginatedEmployees(
+        items=[_summary(e, statuses.get(e.id)) for e in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=max(ceil(total / page_size), 1),
+    )
+
+
+@router.get("/departments", response_model=list[str])
+def list_departments(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return [row[0] for row in db.execute(select(Employee.department).distinct().order_by(Employee.department)).all()]
+
+
+@router.get("/{employee_id}", response_model=EmployeeDetail)
+def read_employee(
+    employee_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_admin)
+):
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
+    return _detail(db, employee, include_salary=True)
+
+
+@router.patch("/{employee_id}", response_model=EmployeeDetail)
+def update_employee(
+    employee_id: int,
+    payload: EmployeeAdminUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No employee with that ID.")
+
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Nothing to save — change a field first.")
+
+    role = data.pop("role", None)
+    is_active = data.pop("is_active", None)
+    manager_id = data.pop("manager_id", "__unset__")
+
+    if manager_id != "__unset__":
+        if manager_id == employee.id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "An employee cannot report to themselves.")
+        if manager_id is not None and db.get(Employee, manager_id) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "That manager does not exist.")
+        employee.manager_id = manager_id
+
+    for field, value in data.items():
+        setattr(employee, field, value)
+
+    if role is not None:
+        if employee.user.id == admin.id and role != Role.ADMIN:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot remove your own admin access.")
+        employee.user.role = role.value
+    if is_active is not None:
+        if employee.user.id == admin.id and not is_active:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot deactivate your own account.")
+        employee.user.is_active = is_active
+
+    db.commit()
+    db.refresh(employee)
+    bus.publish(
+        "employee.updated",
+        {"employee_id": employee.id, "full_name": employee.full_name, "by": "admin"},
+        to_user_ids=[employee.user_id],
+    )
+    return _detail(db, employee, include_salary=True)
